@@ -225,4 +225,3 @@ class DeepReservoir(LeakyReservoir):
     def _get_state(self):
         return np.hstack(self._state_view[self.output_layers])
 
-
