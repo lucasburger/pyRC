@@ -159,28 +159,47 @@ class DeepReservoir(LeakyReservoir):
     def set_connection(self, layer_from, layer_to=None, matrix=None, **kwargs):
         if layer_to is None: layer_to = layer_from
         if matrix is None: matrix = random_echo_matrix(size=(self.layers[0]['size'],)*2, **kwargs)
-        self._echo_view[layer_from, layer_to] = matrix
+        self._echo_view[layer_from, layer_to][:, :] = matrix
 
     def update(self, input_array):
         if input_array.ndim == 1 or input_array.shape[0] == 1:
             new_input = np.zeros_like(self._state)
-            new_input[self._input_indices] = input_array
+            np.put(np.zeros_like(self._state), self._input_indices, input_array)
             self.state = new_input
             return self.state
         else:
             return np.apply_along_axis(self.update, axis=1, arr=input_array)
 
     def __echo_view(self):
-        size = self.layers[0]['size']
-        shape = (self.num_layers, self.num_layers, size, size)
-        strides = ( size * self._echo.strides[0] , size * self._echo.strides[1]) + self._echo.strides
-        return as_strided(self._echo, shape=shape, strides=strides)
+        sizes = [l['size'] for l in self.layers[0]]
+        if len(set(sizes)) == 1:
+            size = self.layers[0]['size']
+            shape = (self.num_layers, self.num_layers, size, size)
+            strides = ( size * self._echo.strides[0] , size * self._echo.strides[1]) + self._echo.strides
+            return as_strided(self._echo, shape=shape, strides=strides)
+        else:
+            inds = [0] + np.cumsum(sizes).tolist()
+            l = [
+                [
+                self._echo[slice(i_from, j_from), slice(i_to, j_to)] 
+                for i_to, j_to in zip(inds[:-1], inds[1:])
+                ]
+                for i_from, j_from in zip(inds[:-1], inds[1:])
+                ]   
+            return np.array(l)
+
 
     def __state_view(self):
-        size = self.layers[0]['size']
-        shape = (self.num_layers, size)
-        strides = (size * self._state.strides[0], self._state.strides[0])
-        return as_strided(self._state, shape=shape, strides=strides)
+        sizes = [l['size'] for l in self.layers[0]]
+        if len(set(sizes)) == 1:
+            size = self.layers[0]['size']
+            shape = (self.num_layers, size)
+            strides = (size * self._state.strides[0], self._state.strides[0])
+            return as_strided(self._state, shape=shape, strides=strides)
+        else:
+            inds = [0] + np.cumsum(sizes).tolist()
+            list_of_views = list([self._state[slice(i, j)] for i, j in zip(inds[:-1], inds[1:])])
+            return np.array(list_of_views)
 
     def copy(self):
         r = deepcopy(self)
@@ -224,4 +243,49 @@ class DeepReservoir(LeakyReservoir):
 
     def _get_state(self):
         return np.hstack(self._state_view[self.output_layers])
+
+class ReservoirArray:
+
+    _reservoir_dict = {
+        'sparsity': 0.5, 'size': 200,
+        'leak': 1.0, 'bias': 0.0,
+        'echo': None}
+
+    def __init__(self, *args, **kwargs):
+        self.reservoirs = list()
+
+    def add_reservoir(self, **kwargs):
+        lengths = []
+        for k, v in kwargs.items():
+            if not isinstance(v, list):
+                kwargs[k] = [v]
+                lengths.append(1)
+            else:
+                lengths.append(len(v))
+
+        if len(set(lengths)) != 1:
+            raise ValueError
+
+        length = lengths[0]
+        for i in range(length):
+            new_kwargs = {k: v[i] for k, v in kwargs.items()}
+            self.reservoirs.append(LeakyReservoir(**new_kwargs))
+
+    def update(self, input_array):
+        return np.hstack([r.update(input_array) for r in self.reservoirs])
+
+    def copy(self):
+        return deepcopy(self)
+
+    @property
+    def size(self):
+        return sum([r.size for r in self.reservoirs])
+
+    @property
+    def state(self):
+        return self._get_state()
+    
+    def _get_state(self):
+        return np.hstack([r.state for r in self.reservoirs])
+
 
