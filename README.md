@@ -1,0 +1,2 @@
+# pyRC
+Reservoir Computing Library
