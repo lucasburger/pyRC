@@ -106,3 +106,26 @@ def expand_echo_matrix(echo=None, new_shape=None, new_matrix=None):
     if new_matrix is not None:
         new_echo[echo.shape[0]:new_echo.shape[0], echo.shape[1]:new_echo.shape[1]] = new_matrix
     return new_echo
+
+def self_activation(radius=1):
+    def ret_fun(x):
+        return radius * x / np.linalg.norm(x)
+    return ret_fun
+
+def make_kwargs_one_length(func):
+    def f(*args, **kwargs):
+        lengths = []
+        for k,v in kwargs.items():
+            if isinstance(v, list):
+                lengths.append(len(v))
+
+        if len(set(lengths)) > 1:
+            raise ValueError
+
+        ma = max(lengths)
+        for k,v in kwargs.items():
+            if not isinstance(v, list):
+                kwargs[k] = [v for _ in range(ma)]
+
+        return func(*args, **kwargs)
+    return f

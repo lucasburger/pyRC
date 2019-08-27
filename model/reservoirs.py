@@ -1,5 +1,6 @@
 import numpy as np
 from util import matrix_uniform, expand_echo_matrix, random_echo_matrix
+from util import make_kwargs_one_length
 from numpy.lib.stride_tricks import as_strided
 from copy import deepcopy
 
@@ -82,7 +83,7 @@ class Reservoir(BaseReservoir):
 
 class LeakyReservoir(Reservoir):
 
-    def __init__(self, *args, leak=1.0, **kwargs):
+    def __init__(self, *args, leak=1.0, size=100, **kwargs):
         super().__init__(*args, **kwargs)
         self._leak = leak
 
@@ -245,30 +246,13 @@ class DeepReservoir(LeakyReservoir):
         return np.hstack(self._state_view[self.output_layers])
 
 class ReservoirArray:
-
-    _reservoir_dict = {
-        'sparsity': 0.5, 'size': 200,
-        'leak': 1.0, 'bias': 0.0,
-        'echo': None}
-
+    
     def __init__(self, *args, **kwargs):
         self.reservoirs = list()
 
+    @make_kwargs_one_length
     def add_reservoir(self, **kwargs):
-        lengths = []
-        for k, v in kwargs.items():
-            if not isinstance(v, list):
-                kwargs[k] = [v]
-                lengths.append(1)
-            else:
-                lengths.append(len(v))
-
-        if len(set(lengths)) != 1:
-            raise ValueError
-
-        length = lengths[0]
-        for i in range(length):
-            new_kwargs = {k: v[i] for k, v in kwargs.items()}
+        for new_kwargs in [{k: v[i] for k, v in kwargs.items()} for i in range(max(map(len, kwargs.values())))]:
             self.reservoirs.append(LeakyReservoir(**new_kwargs))
 
     def update(self, input_array):
