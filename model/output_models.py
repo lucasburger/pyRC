@@ -230,7 +230,6 @@ class LogRegCV(RidgeClassifier):
         return super().predict(x)
 
 
-
 class ElasticNetCV(sklearn.linear_model.ElasticNetCV):
 
     def __init__(self, *args, ts_split=None, cv_alphas=None, **kwargs):

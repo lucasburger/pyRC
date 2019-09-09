@@ -26,11 +26,16 @@ def random_echo_matrix(size, sparsity=0.0, spectral_radius=None):
     w = matrix_uniform(size, size)
     w[matrix_uniform(w.shape, low=0) < sparsity] = 0
     if spectral_radius:
-        radius = np.max(np.abs(np.linalg.eigvals(w)))
+        if size[0] != size[1]:
+            radius = np.max(np.abs(np.linalg.svd(w, compute_uv=False)))
+        else:
+            radius = np.max(np.abs(np.linalg.eigvals(w)))
+
         if radius > 0:
             w *= (spectral_radius / radius)
         else:
             w = np.zeros((size, size))
+        
     return w
 
 
@@ -118,7 +123,10 @@ def make_kwargs_one_length(func):
         for k,v in kwargs.items():
             if isinstance(v, list):
                 lengths.append(len(v))
-
+            else:
+                kwargs[k] = [v]
+                lengths.append(1)
+                
         if len(set(lengths)) > 1:
             raise ValueError
 

@@ -83,8 +83,8 @@ class Reservoir(BaseReservoir):
 
 class LeakyReservoir(Reservoir):
 
-    def __init__(self, *args, leak=1.0, size=100, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, leak=1.0, size=200, **kwargs):
+        super().__init__(*args, size=size, **kwargs)
         self._leak = leak
 
     def _get_leak(self):
@@ -109,7 +109,7 @@ class LeakyReservoir(Reservoir):
     def input_size(self):
         return self.size
 
-class DeepReservoir(LeakyReservoir):
+class TopologicalReservoir(LeakyReservoir):
 
     _layer_dict = {
         'output': True, 'input': False, 
@@ -159,7 +159,8 @@ class DeepReservoir(LeakyReservoir):
 
     def set_connection(self, layer_from, layer_to=None, matrix=None, **kwargs):
         if layer_to is None: layer_to = layer_from
-        if matrix is None: matrix = random_echo_matrix(size=(self.layers[0]['size'],)*2, **kwargs)
+        if matrix is None: 
+            matrix = random_echo_matrix(size=(self.layers[layers_from]['size'],self.layers[layer_to]['size']), **kwargs)
         self._echo_view[layer_from, layer_to][:, :] = matrix
 
     def update(self, input_array):
@@ -188,7 +189,6 @@ class DeepReservoir(LeakyReservoir):
                 for i_from, j_from in zip(inds[:-1], inds[1:])
                 ]   
             return np.array(l)
-
 
     def __state_view(self):
         sizes = [l['size'] for l in self.layers[0]]
@@ -272,4 +272,44 @@ class ReservoirArray:
     def _get_state(self):
         return np.hstack([r.state for r in self.reservoirs])
 
+class DeepReservoir(ReservoirArray):
 
+    def __init__(self):
+        super().__init__()
+        self.connections = list()
+        self.input_layers = list()
+        self.output_layers = list()
+
+    @make_kwargs_one_length 
+    def add_layer(self, **kwargs):
+        for new_kwargs in [{k: v[i] for k, v in kwargs.items()} for i in range(max(map(len, kwargs.values())))]:
+            if new_kwargs.pop('input', False) or self.depth == 0:
+                self.input_layers.append(self.depth)
+            if new_kwargs.pop('output', True):
+                self.output_layers.append(self.depth)
+            if self.depth > 0:
+                s1 = self.reservoirs[-1].size
+                s2 = new_kwargs.get('size', 200)
+                self.connections = random_echo_matrix(size=(s1, s2), spectral_radius=0.95)
+            super().add_reservoir(**new_kwargs)
+
+    def update(self, input_array):
+        if input_array.ndim == 1 or input_array.shape[0] == 1:
+            for i, r in enumerate(self.reservoirs):
+                if i in self.input_layers:
+                    layer_input = input_array.copy()
+                else:
+                    layer_input = np.zeros_like(r.state)
+                if i > 0:
+                    layer_input += np.dot(self.connections[i], state)
+                state = r.update(layer_input)
+            return self.state
+        else:
+            return np.apply_along_axis(self.update, axis=1, arr=input_array)
+
+    def _get_state(self):
+        return np.hstack([self.reservoirs[i].state for i in self.output_layers])
+
+    @property
+    def depth(self):
+        return len(self.reservoirs)
