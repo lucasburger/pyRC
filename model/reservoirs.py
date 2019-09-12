@@ -5,10 +5,6 @@ from numpy.lib.stride_tricks import as_strided
 from copy import deepcopy
 import multiprocessing as mp
 
-def _update(reservoir, x):
-    reservoir.update(x)
-
-
 class BaseReservoir:
 
     def __init__(self, size=0, activation=np.tanh):
@@ -20,7 +16,7 @@ class BaseReservoir:
 
     def update(self, input_array):
         if input_array.ndim == 1 or self.size in input_array.shape and 1 in input_array.shape:
-            self.state = input_array.flatten()
+            self.state = input_array.ravel()
             return self.state
         elif self.size in input_array.shape:
             return np.apply_along_axis(self.update, axis=input_array.shape.index(self.size), arr=input_array)
@@ -106,7 +102,7 @@ class LeakyReservoir(Reservoir):
         self._set_leak(x)
 
     def _set_state(self, x):
-        new_state = np.dot(self._echo, self._state) + x.flatten() + self.bias * self._W_bias
+        new_state = np.dot(self._echo, self._state) + x + self.bias * self._W_bias
         self._state[:] = self.leak * self.activation(new_state) + (1 - self.leak) * self._state
 
     @property
@@ -253,7 +249,8 @@ class ReservoirArray:
     
     def __init__(self, *args, **kwargs):
         self.reservoirs = list()
-        self.add_reservoir(**kwargs)
+        if kwargs:
+            self.add_reservoir(**kwargs)
 
     @make_kwargs_one_length
     def add_reservoir(self, **kwargs):
@@ -261,8 +258,7 @@ class ReservoirArray:
             self.reservoirs.append(LeakyReservoir(**new_kwargs))
 
     def update(self, input_array):
-        with mp.Pool(mp.cpu_count()) as p:
-            return np.hstack([p.apply(_update, args=(r, input_array)) for r in self.reservoirs])
+        return np.hstack([r.update(input_array) for r in self.reservoirs])
 
     def copy(self):
         return deepcopy(self)
