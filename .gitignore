@@ -1,8 +1,10 @@
 /data
 /figures
-*/__pycache__
 /dump
 /.vscode
+
+.DS_Store
+
 test*.py
 try*.py
 dePrado.py

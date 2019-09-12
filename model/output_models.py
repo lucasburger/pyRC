@@ -62,7 +62,7 @@ class RidgeRegressionCV(BaseOutputModel):
 
         if x.ndim == 1:
             if self.size and (x[0] != 1 or x.shape[0] == self.size - 1):
-                x = np.hstack((np.ones(shape=(1,)), x))
+                x = np.hstack((np.ones(shape=(1,)), x)).flatten()
         else:
             if x.shape[1] == 1 and self.size is None:
                 x = np.hstack((np.ones((1,)), x.flatten()))
@@ -174,91 +174,91 @@ class RidgeRegressionCV(BaseOutputModel):
         self._size = other
 
 
-class TimeSeriesCV(RidgeCV):
+# class TimeSeriesCV(RidgeCV):
 
-    def __init__(self, *args, **kwargs):
-        self.error = None
-        self.fitted = None
-        super().__init__(*args, **kwargs)
+#     def __init__(self, *args, **kwargs):
+#         self.error = None
+#         self.fitted = None
+#         super().__init__(*args, **kwargs)
 
-    def fit(self, x, y, **kwargs):
-        # train the super model
-        r = super().fit(x, y, **kwargs)
+#     def fit(self, x, y, **kwargs):
+#         # train the super model
+#         r = super().fit(x, y, **kwargs)
 
-        # predict and store error
-        self.fitted = super().predict(x)
+#         # predict and store error
+#         self.fitted = super().predict(x)
 
-        self.error = util.RMSE(self.fitted, y)
+#         self.error = util.RMSE(self.fitted, y)
 
-        return r
+#         return r
 
-    def predict(self, x):
-        if x.ndim == 1:
-            if x.shape[0] == self.coef_.shape[-1]:
-                x = x.reshape((1, x.shape[0]))
-            else:
-                x = x.reshape((x.shape[0], 1))
+#     def predict(self, x):
+#         if x.ndim == 1:
+#             if x.shape[0] == self.coef_.shape[-1]:
+#                 x = x.reshape((1, x.shape[0]))
+#             else:
+#                 x = x.reshape((x.shape[0], 1))
 
-        return super().predict(x)
-
-
-class LogRegCV(RidgeClassifier):
-
-    def __init__(self, *args, **kwargs):
-        self.error = None
-        self.fitted = None
-        super().__init__(*args, **kwargs)
-
-    def fit(self, x, y, **kwargs):
-        # train the super model
-        r = super().fit(x, np.ravel(y), **kwargs)
-
-        # predict and store error
-        self.fitted = super().predict(x)
-
-        self.error = np.mean(self.fitted != y)
-
-        return r
-
-    def predict(self, x):
-        if x.ndim == 1:
-            if x.shape[0] == self.coef_.shape[-1]:
-                x = x.reshape((1, x.shape[0]))
-            else:
-                x = x.reshape((x.shape[0], 1))
-
-        return super().predict(x)
+#         return super().predict(x)
 
 
-class ElasticNetCV(sklearn.linear_model.ElasticNetCV):
+# class LogRegCV(RidgeClassifier):
 
-    def __init__(self, *args, ts_split=None, cv_alphas=None, **kwargs):
-        self.cv_alphas = cv_alphas if cv_alphas is None else np.arange(0.1, 1.1, 0.1)
-        self.ts_split = ts_split
-        super().__init__(*args, **kwargs)
+#     def __init__(self, *args, **kwargs):
+#         self.error = None
+#         self.fitted = None
+#         super().__init__(*args, **kwargs)
 
-    def fit(self, x, y, error_fun=util.RMSE, **kwargs):
+#     def fit(self, x, y, **kwargs):
+#         # train the super model
+#         r = super().fit(x, np.ravel(y), **kwargs)
 
-        # cv_split = self.ts_split if self.ts_split is not None else util.ts_split(x.shape[0])
+#         # predict and store error
+#         self.fitted = super().predict(x)
 
-        # error = dict()
+#         self.error = np.mean(self.fitted != y)
 
-        # for a in self.cv_alphas:
-        #     error_alpha = []
-        #     for split in cv_split:
-        #         x_train, y_train = x[split[0], :], y[split[0], :]
-        #         x_test, y_test = x[split[1], :], y[split[1], :]
+#         return r
 
-        #         y_fit = deepcopy(self).fit(x_train, y_train).predict(x_test)
+#     def predict(self, x):
+#         if x.ndim == 1:
+#             if x.shape[0] == self.coef_.shape[-1]:
+#                 x = x.reshape((1, x.shape[0]))
+#             else:
+#                 x = x.reshape((x.shape[0], 1))
+
+#         return super().predict(x)
+
+
+# class ElasticNetCV(sklearn.linear_model.ElasticNetCV):
+
+#     def __init__(self, *args, ts_split=None, cv_alphas=None, **kwargs):
+#         self.cv_alphas = cv_alphas if cv_alphas is None else np.arange(0.1, 1.1, 0.1)
+#         self.ts_split = ts_split
+#         super().__init__(*args, **kwargs)
+
+#     def fit(self, x, y, error_fun=util.RMSE, **kwargs):
+
+#         # cv_split = self.ts_split if self.ts_split is not None else util.ts_split(x.shape[0])
+
+#         # error = dict()
+
+#         # for a in self.cv_alphas:
+#         #     error_alpha = []
+#         #     for split in cv_split:
+#         #         x_train, y_train = x[split[0], :], y[split[0], :]
+#         #         x_test, y_test = x[split[1], :], y[split[1], :]
+
+#         #         y_fit = deepcopy(self).fit(x_train, y_train).predict(x_test)
                     
-        #         error_alpha.append(error_fun(y_fit, y_test))
+#         #         error_alpha.append(error_fun(y_fit, y_test))
 
-        #         error[a] = np.mean(error_alpha)
+#         #         error[a] = np.mean(error_alpha)
 
-        #     self.alpha = min(error, key=error.get)
+#         #     self.alpha = min(error, key=error.get)
 
-        super().fit(x, y)
-        self.fitted = super().predict(x)
-        self.error = error_fun(self.fitted, y)
-        return self
+#         super().fit(x, y)
+#         self.fitted = super().predict(x)
+#         self.error = error_fun(self.fitted, y)
+#         return self
 
