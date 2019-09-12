@@ -22,22 +22,22 @@ class EchoStateNetwork:
     def __init__(self, **kwargs):
 
         self.random_seed = kwargs.get('random_seed', None)
-        self.rmg = kwargs.get('prob_dist', util.matrix_uniform)
+        self.rmg = kwargs.pop('prob_dist', util.matrix_uniform)
 
         self.input_scaler = tanh
         self.output_scaler = identity
 
-        self.input_activation = kwargs.get('input_activation', np.tanh)
-        self.input_inv_activation = kwargs.get('input_inv_activation', np.arctanh)
+        self.input_activation = kwargs.pop('input_activation', np.tanh)
+        self.input_inv_activation = kwargs.pop('input_inv_activation', np.arctanh)
 
-        self.output_activation = kwargs.get('output_activation', util.identity)
-        self.output_inv_activation = kwargs.get('output_inv_activation', util.identity)
+        self.output_activation = kwargs.pop('output_activation', util.identity)
+        self.output_inv_activation = kwargs.pop('output_inv_activation', util.identity)
 
-        self.feed_input = kwargs.get('feed_input', False)
+        self.feed_input = kwargs.pop('feed_input', False)
+
+        self.output_model = kwargs.pop('output_model', RidgeRegressionCV(min_eigenvalue=1e-6))
 
         self.reservoir = kwargs.get('reservoir', self._reservoir_class(**kwargs))
-
-        self.output_model = kwargs.get('output_model', RidgeRegressionCV(min_eigenvalue=1e-6))
 
         self.W_in = None
         self._burn_in_feature = None
@@ -77,6 +77,7 @@ class EchoStateNetwork:
         if self.feed_input: x = np.hstack((self._feature, x))
         
         # fit output model and calculate errors
+        print('evolved reservoir')
         self.output_model.fit(x, self._teacher.flatten())
         self._fitted = self.output_model.predict(x)
         self._errors = (self._fitted - self._teacher).flatten()
@@ -114,7 +115,7 @@ class EchoStateNetwork:
         while True and count < max_iter:
             x = self.update(_feature, reservoir=reservoir)
             if self.feed_input: x = np.hstack((_feature, x))
-            output = self.output_model.predict(x)
+            output = self.output_model.predict(x.reshape(1,-1))
             _feature = self.output_to_input(output) + (np.random.choice(self._errors, 1) if inject_error else 0)
             count += 1
             yield self.output_scaler.unscale(output)

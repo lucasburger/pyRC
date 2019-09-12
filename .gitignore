@@ -1,8 +1,12 @@
 /data
+/figures
+*/__pycache__
 /dump
+/.vscode
 test*.py
 try*.py
 dePrado.py
 To-Dos.txt
 
 *OLD*.py
+*.pyc

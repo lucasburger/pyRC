@@ -3,6 +3,10 @@ from util import matrix_uniform, expand_echo_matrix, random_echo_matrix
 from util import make_kwargs_one_length
 from numpy.lib.stride_tricks import as_strided
 from copy import deepcopy
+import multiprocessing as mp
+
+def _update(reservoir, x):
+    reservoir.update(x)
 
 
 class BaseReservoir:
@@ -249,6 +253,7 @@ class ReservoirArray:
     
     def __init__(self, *args, **kwargs):
         self.reservoirs = list()
+        self.add_reservoir(**kwargs)
 
     @make_kwargs_one_length
     def add_reservoir(self, **kwargs):
@@ -256,7 +261,8 @@ class ReservoirArray:
             self.reservoirs.append(LeakyReservoir(**new_kwargs))
 
     def update(self, input_array):
-        return np.hstack([r.update(input_array) for r in self.reservoirs])
+        with mp.Pool(mp.cpu_count()) as p:
+            return np.hstack([p.apply(_update, args=(r, input_array)) for r in self.reservoirs])
 
     def copy(self):
         return deepcopy(self)
@@ -313,3 +319,15 @@ class DeepReservoir(ReservoirArray):
     @property
     def depth(self):
         return len(self.reservoirs)
+
+    @property
+    def input_size(self):
+        input_s = [self.reservoirs[i].size for i in self.input_layers]
+        if len(set(input_s)) > 1:
+            raise ValueError('Not the same input sizes in input connected Subreservoirs')
+        return list(set(input_s))[0]
+
+    @property
+    def echo(self):
+        return np.block([r.echo for r in self.reservoirs])
+        
