@@ -256,6 +256,8 @@ class ReservoirArray:
     def add_reservoir(self, **kwargs):
         for new_kwargs in [{k: v[i] for k, v in kwargs.items()} for i in range(max(map(len, kwargs.values())))]:
             self.reservoirs.append(LeakyReservoir(**new_kwargs))
+        
+        assert len(list(set(r.size for r in self.reservoirs))) == 1
 
     def update(self, input_array):
         return np.hstack([r.update(input_array) for r in self.reservoirs])
@@ -266,6 +268,10 @@ class ReservoirArray:
     @property
     def size(self):
         return sum([r.size for r in self.reservoirs])
+
+    @property
+    def input_size(self):
+        return self.reservoirs[0].size
 
     @property
     def state(self):
@@ -292,7 +298,7 @@ class DeepReservoir(ReservoirArray):
             if self.depth > 0:
                 s1 = self.reservoirs[-1].size
                 s2 = new_kwargs.get('size', 200)
-                self.connections = random_echo_matrix(size=(s1, s2), spectral_radius=0.95)
+                self.connections.append(random_echo_matrix(size=(s1, s2), spectral_radius=0.95))
             super().add_reservoir(**new_kwargs)
 
     def update(self, input_array):
@@ -303,7 +309,7 @@ class DeepReservoir(ReservoirArray):
                 else:
                     layer_input = np.zeros_like(r.state)
                 if i > 0:
-                    layer_input += np.dot(self.connections[i], state)
+                    layer_input += np.dot(self.connections[i-1], state)
                 state = r.update(layer_input)
             return self.state
         else:
@@ -326,4 +332,4 @@ class DeepReservoir(ReservoirArray):
     @property
     def echo(self):
         return np.block([r.echo for r in self.reservoirs])
-        
+

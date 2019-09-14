@@ -1,7 +1,7 @@
 
 import numpy as np
 from model.output_models import RidgeRegressionCV
-from model.reservoirs import LeakyReservoir, DeepReservoir
+from model.reservoirs import LeakyReservoir, DeepReservoir, ReservoirArray
 from model.scaler import tanh, identity
 import util
 
@@ -11,17 +11,10 @@ class EchoStateNetwork:
     """
     This class is the self-written implementation of the Echo State Network
     """
-
-    _burned_in = False
-
-    W_in = None
-    W_fb = None
-
     _reservoir_class = LeakyReservoir
 
     def __init__(self, **kwargs):
 
-        self.random_seed = kwargs.get('random_seed', None)
         self.rmg = kwargs.pop('prob_dist', util.matrix_uniform)
 
         self.input_scaler = tanh
@@ -40,6 +33,7 @@ class EchoStateNetwork:
         self.reservoir = kwargs.get('reservoir', self._reservoir_class(**kwargs))
 
         self.W_in = None
+        self._burned_in = False
         self._burn_in_feature = None
         self._feature = None
         self._output = None
@@ -77,7 +71,6 @@ class EchoStateNetwork:
         if self.feed_input: x = np.hstack((self._feature, x))
         
         # fit output model and calculate errors
-        print('evolved reservoir')
         self.output_model.fit(x, self._teacher.flatten())
         self._fitted = self.output_model.predict(x)
         self._errors = (self._fitted - self._teacher).flatten()
@@ -127,20 +120,6 @@ class EchoStateNetwork:
     The following are helper functions as well as attribute setters and getters
     """
 
-    def get_features(self, ind):
-        if self._feature is not None:
-            if self._feature.ndim == 1:
-                return self._feature[ind]
-            else:
-                return self._feature[ind, :]
-
-    def get_teacher(self, ind):
-        if self._teacher is not None:
-            if self._teacher.ndim == 1:
-                return self._teacher[ind]
-            else:
-                return self._teacher[ind, :]
-
     @property
     def n_inputs(self):
         return self._feature.shape[-1]
@@ -188,16 +167,6 @@ class EchoStateNetwork:
     @property
     def fitted(self):
         return self.output_scaler.unscale(self.output_inv_activation(self._fitted))
-
-    @property
-    def random_seed(self):
-        return self._random_seed
-
-    @random_seed.setter
-    def random_seed(self, x):
-        if x is not None:
-            self._random_seed = x
-            np.random.seed(x)
 
     @burn_in_feature.setter
     def burn_in_feature(self, x):
@@ -249,3 +218,24 @@ class deepESN(EchoStateNetwork):
     @property
     def layers(self):
         return getattr(self.reservoir, 'layers', None)
+
+class parallelESN(EchoStateNetwork):
+    _reservoir_class = ReservoirArray
+
+    def add_reservoir(self, *args, **kwargs):
+        self.reservoir.add_reservoir(*args, **kwargs)
+
+    @property
+    def reservoirs(self):
+        return getattr(self.reservoir, 'reservoir', None)
+
+
+class MultiStepESN(EchoStateNetwork):
+    _reservoir_class = ReservoirArray
+
+    def add_reservoir(self, *args, **kwargs):
+        self.reservoir.add_reservoir(*args, **kwargs)
+
+    @property
+    def reservoirs(self):
+        return getattr(self.reservoir, 'reservoir', None)

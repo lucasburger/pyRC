@@ -2,10 +2,14 @@ import numpy as np
 
 
 def matrix_normal(s1, s2=None, loc=0, scale=1):
+    
     if isinstance(s1, tuple):
         shape = s1
+    elif s2 is None:
+        shape = (s1,)
     else:
         shape = (s1, s2)
+
     return np.random.normal(loc=loc, scale=scale, size=shape)
 
 
@@ -20,10 +24,20 @@ def matrix_uniform(s1, s2=None, low=-1, high=1):
     return np.random.uniform(low=low, high=high, size=shape)
 
 
-def random_echo_matrix(size, sparsity=0.0, spectral_radius=None):
+def random_echo_matrix(size, sparsity=0.0, spectral_radius=None, prob_dist='uni'):
+
+    if prob_dist == 'uni':
+        matrix_fun = matrix_uniform
+    elif prob_dist in ['norm', 'normal']:
+        matrix_fun = matrix_normal
+
+    if not isinstance(size, tuple):
+        size = (size, size)
+
     if size == (0, 0):
         return np.zeros(shape=size, dtype=np.float64)
-    w = matrix_uniform(size, size)
+
+    w = matrix_fun(size)
     w[matrix_uniform(w.shape, low=0) < sparsity] = 0
     if spectral_radius:
         if size[0] != size[1]:
@@ -34,7 +48,7 @@ def random_echo_matrix(size, sparsity=0.0, spectral_radius=None):
         if radius > 0:
             w *= (spectral_radius / radius)
         else:
-            w = np.zeros((size, size))
+            w = np.zeros(size)
         
     return w
 
@@ -73,28 +87,6 @@ def MackeyGlass(l, beta=0.2, gamma=0.1, tau=17, n=10, random_seed=None):
     for _ in range(l-tau):
         new_value = x[-1] + beta*x[-tau]/(1+x[-tau]**n) - gamma*x[-1]
         x.append(new_value)
-
-    return x
-
-
-def recurrence_of_reservoir(reservoir):
-    layers = reservoir.layers
-    connections = reservoir.connections
-    ll = []
-    for i in range(len(layers)):
-        l = []
-        for j, layer in enumerate(layers):
-            if j == i:
-                l.append(layer.echo)
-            else:
-                m = connections.get('{}-{}'.format(i, j), None)
-                if m is not None:
-                    l.append(m)
-                else:
-                    l.append(np.ndarray(shape=(layers[i].size, layer.size)))
-        ll.append(l)
-
-    x = np.block(ll)
 
     return x
 
