@@ -356,14 +356,14 @@ class DeepESNReservoir(ESNReservoirArray):
 
 class SASReservoir(BaseReservoir):
 
-    def __init__(self, *args, p=1, q=1, sparsity=None, lambda_max=0.95, allow_sparse_coefficients=True, **kwargs):
+    def __init__(self, *args, input_dim=1, p=1, q=1, sparsity=None, lambda_max=0.95, **kwargs):
         super().__init__(*args, activation=identity, **kwargs)
 
         assert 0 < lambda_max < 1
         if sparsity is None:
             sparsity = 1-float(1/self.size) if self.size > 50 else 0.9
-        self.p = MultivariatePolynomial.random(shape=(self.size, self.size), input_dim=1, order=p, sparsity=sparsity, spectral_radius=lambda_max)
-        self.q = MultivariatePolynomial.random(shape=(self.size,), input_dim=1, order=q)
+        self.p = MultivariatePolynomial.random(shape=(self.size, self.size), input_dim=input_dim, order=p, sparsity=sparsity, spectral_radius=lambda_max)
+        self.q = MultivariatePolynomial.random(shape=(self.size,), input_dim=input_dim, order=q)
 
     def update(self, x):
         x = x.reshape((-1, 1))
@@ -375,11 +375,8 @@ class SASReservoir(BaseReservoir):
 
 class TrigoSASReservoir(SASReservoir):
 
-    def __init__(self, *args, p=1, q=1, sparsity=None, lambda_max=0.95, allow_sparse_coefficients=True, **kwargs):
+    def __init__(self, *args, input_dim=1, p=1, q=1, **kwargs):
         super().__init__(*args, activation=identity, **kwargs)
 
-        assert 0 < lambda_max < 1
-        if sparsity is None:
-            sparsity = 1-float(1/self.size) if self.size > 50 else 0.9
         self.p = MultivariateTrigoPolynomial.random(shape=(self.size, self.size), input_dim=1, order=p, sparsity=sparsity, spectral_radius=lambda_max)
         self.q = MultivariateTrigoPolynomial.random(shape=(self.size,), input_dim=1, order=q)
