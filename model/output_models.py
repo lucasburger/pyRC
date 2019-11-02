@@ -5,6 +5,7 @@ import sklearn.linear_model
 from copy import deepcopy
 import util
 from abc import ABCMeta, abstractmethod
+import numba
 
 
 class BaseOutputModel:
@@ -250,7 +251,7 @@ class RidgeRegressionCV(BaseOutputModel):
 #         #         x_test, y_test = x[split[1], :], y[split[1], :]
 
 #         #         y_fit = deepcopy(self).fit(x_train, y_train).predict(x_test)
-                    
+
 #         #         error_alpha.append(error_fun(y_fit, y_test))
 
 #         #         error[a] = np.mean(error_alpha)
@@ -261,4 +262,3 @@ class RidgeRegressionCV(BaseOutputModel):
 #         self.fitted = super().predict(x)
 #         self.error = error_fun(self.fitted, y)
 #         return self
-

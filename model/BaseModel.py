@@ -1,17 +1,18 @@
 
+from copy import copy
 import numpy as np
 from model.output_models import RidgeRegressionCV
-from model.reservoirs import LeakyReservoir, DeepReservoir, ReservoirArray
+from model.reservoirs import BaseReservoir
 from model.scaler import tanh, identity
 import util
 
 
-class EchoStateNetwork:
+class ReservoirModel:
 
     """
     This class is the self-written implementation of the Echo State Network
     """
-    _reservoir_class = LeakyReservoir
+    _reservoir_class = BaseReservoir
 
     def __init__(self, **kwargs):
 
@@ -21,16 +22,20 @@ class EchoStateNetwork:
         self.output_scaler = identity
 
         self.input_activation = kwargs.pop('input_activation', np.tanh)
-        self.input_inv_activation = kwargs.pop('input_inv_activation', np.arctanh)
+        self.input_inv_activation = kwargs.pop(
+            'input_inv_activation', np.arctanh)
 
         self.output_activation = kwargs.pop('output_activation', util.identity)
-        self.output_inv_activation = kwargs.pop('output_inv_activation', util.identity)
+        self.output_inv_activation = kwargs.pop(
+            'output_inv_activation', util.identity)
 
         self.feed_input = kwargs.pop('feed_input', False)
 
-        self.output_model = kwargs.pop('output_model', RidgeRegressionCV(min_eigenvalue=1e-6))
+        self.output_model = kwargs.pop(
+            'output_model', RidgeRegressionCV(min_eigenvalue=1e-6))
 
-        self.reservoir = kwargs.get('reservoir', self._reservoir_class(**kwargs))
+        self.reservoir = kwargs.get(
+            'reservoir', self._reservoir_class(**kwargs))
 
         self.W_in = None
         self._burned_in = False
@@ -41,18 +46,38 @@ class EchoStateNetwork:
         self._fitted = None
         self._errors = None
 
-    def train(self, feature, burn_in_feature=None, burn_in_split=0.1, teacher=None):
+    def update(self, input_array, reservoir=None):
+        """
+        Updates the reservoir with the given input and returns the state
+        param np.ndarray input_array:
+        """
+        if reservoir is None:
+            reservoir = self.reservoir
+
+        if input_array.ndim == 1:
+            if input_array.shape[0] == reservoir.size:
+                input_array = input_array.reshape((1, -1))
+            else:
+                input_array = input_array.reshape((-1, 1))
+
+        # if input_array.shape[0] == 1:
+        return self.reservoir.update(np.dot(input_array, self.W_in))
+        # else:
+        #    return np.apply_along_axis(self.update, axis=1, arr=input_array, reservoir=reservoir)
+
+    def train(self, feature, burn_in_feature=None, burn_in_split=0.1, teacher=None,
+              error_fun=util.RMSE, hyper_tuning=False):
         """
         Training of the network
-        :param burn_in_feature: features for the initial transient
         :param feature: features for the training
+        :param burn_in_feature: features for the initial transient
         :param teacher: teacher signal for training
         :param error_fun: error function that should be used
         :return: tuple of minimizer result and dict with used parameter (only if hyper_tuning is True)
         """
 
         if burn_in_feature is None:
-            burn_in_ind = burn_in_split * feature.shape[0]
+            burn_in_ind = int(burn_in_split * feature.shape[0])
             burn_in_feature = feature[:burn_in_ind, :]
             feature = feature[burn_in_ind:, :]
 
@@ -68,21 +93,16 @@ class EchoStateNetwork:
 
         self.update(self._burn_in_feature)
         x = self.update(self._feature)
-        if self.feed_input: x = np.hstack((self._feature, x))
-        
+        if self.feed_input:
+            x = np.hstack((self._feature, x))
+
         # fit output model and calculate errors
-        self.output_model.fit(x, self._teacher.flatten())
+        y = self._teacher.flatten()
+        self.output_model.fit(x, y)
         self._fitted = self.output_model.predict(x)
         self._errors = (self._fitted - self._teacher).flatten()
 
         return self
-
-    def update(self, input_array, reservoir=None):
-        if reservoir is None: reservoir = self.reservoir
-        if input_array.ndim == 1 or input_array.shape[0] == 1:
-            return self.reservoir.update(np.dot(input_array, self.W_in))
-        else:
-            return np.apply_along_axis(self.update, axis=1, arr=input_array, reservoir=reservoir)
 
     def predict(self, n_predictions=0, feature=None, simulation=True, inject_error=False):
         """
@@ -96,21 +116,33 @@ class EchoStateNetwork:
         """
 
         reservoir = self.reservoir.copy() if simulation else self.reservoir
-        _new_feature = self.input_activation(self.input_scaler.scale(self.teacher[-1] if feature is None else feature))
+        _feature = self.input_activation(self.input_scaler.scale(
+            self.teacher[-1] if feature is None else feature))
 
-        return np.hstack(list(self.__prediction_generator(_first_feature=_new_feature, reservoir=reservoir, max_iter=n_predictions, inject_error=inject_error)))
+        return np.hstack(list(self.__prediction_generator(_feature=_feature, reservoir=reservoir, max_iter=n_predictions, inject_error=inject_error)))
 
-    def __prediction_generator(self, _first_feature=None, reservoir=None, simulation=True, max_iter=100, inject_error=False):
+    def __prediction_generator(self, _feature, reservoir, max_iter=1000, inject_error=False):
 
-        _feature = self._teacher[-1] if _first_feature is None else _first_feature
-        reservoir = (self.reservoir.copy() if simulation else self.reservoir) if reservoir is None else reservoir
         count = 0
-        while True and count < max_iter:
+
+        while count < max_iter:
+
+            # get new regressors for output model
             x = self.update(_feature, reservoir=reservoir)
-            if self.feed_input: x = np.hstack((_feature, x))
-            output = self.output_model.predict(x.reshape(1,-1))
-            _feature = self.output_to_input(output) + (np.random.choice(self._errors, 1) if inject_error else 0)
+            if self.feed_input:
+                x = np.hstack((_feature, x))
+
+            # predict next value
+            output = self.output_model.predict(x.reshape(1, -1))
+
+            # transform output to new input and save it in variable _feature
+            _feature = self.output_to_input(output)
+            if inject_error:
+                _feature += np.random.choice(self._errors, 1)
+
+            # increase counter
             count += 1
+
             yield self.output_scaler.unscale(output)
 
     def output_to_input(self, x):
@@ -120,9 +152,12 @@ class EchoStateNetwork:
     The following are helper functions as well as attribute setters and getters
     """
 
+    def __repr__(self):
+        return f"(ReservoirModel: N={self.size}, " + repr(self.reservoir) + ")"
+
     @property
     def n_inputs(self):
-        return self._feature.shape[-1]
+        return self.reservoir.input_size
 
     @property
     def n_outputs(self):
@@ -172,7 +207,8 @@ class EchoStateNetwork:
     def burn_in_feature(self, x):
         if x.ndim == 1:
             x = x.reshape((x.shape[0], 1))
-        self._burn_in_feature = self.input_activation(self.input_scaler.scale(x))
+        self._burn_in_feature = self.input_activation(
+            self.input_scaler.scale(x))
 
     @feature.setter
     def feature(self, x):
@@ -186,7 +222,7 @@ class EchoStateNetwork:
             x = x.reshape((x.shape[0], 1))
         self._teacher = self.output_scaler.scale(x)
         if not self._burned_in:
-            self.W_fb = self.rmg(self.n_outputs, self.reservoir.size)
+            self.W_fb = self.rmg(self.n_outputs, self.reservoir.input_size)
 
     @sparsity.setter
     def sparsity(self, x):
@@ -207,35 +243,3 @@ class EchoStateNetwork:
     @fitted.setter
     def fitted(self, x):
         self._fitted = x
-
-
-class deepESN(EchoStateNetwork):
-    _reservoir_class = DeepReservoir
-
-    def add_layer(self, *args, **kwargs):
-        self.reservoir.add_layer(*args, **kwargs)
-
-    @property
-    def layers(self):
-        return getattr(self.reservoir, 'layers', None)
-
-class parallelESN(EchoStateNetwork):
-    _reservoir_class = ReservoirArray
-
-    def add_reservoir(self, *args, **kwargs):
-        self.reservoir.add_reservoir(*args, **kwargs)
-
-    @property
-    def reservoirs(self):
-        return getattr(self.reservoir, 'reservoir', None)
-
-
-class MultiStepESN(EchoStateNetwork):
-    _reservoir_class = ReservoirArray
-
-    def add_reservoir(self, *args, **kwargs):
-        self.reservoir.add_reservoir(*args, **kwargs)
-
-    @property
-    def reservoirs(self):
-        return getattr(self.reservoir, 'reservoir', None)

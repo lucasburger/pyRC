@@ -1,8 +1,13 @@
 import numpy as np
+from statsmodels.tsa.stattools import adfuller
+from scipy import sparse
+import numba
+from math import factorial as fac
+from itertools import product
 
 
 def matrix_normal(s1, s2=None, loc=0, scale=1):
-    
+
     if isinstance(s1, tuple):
         shape = s1
     elif s2 is None:
@@ -49,7 +54,7 @@ def random_echo_matrix(size, sparsity=0.0, spectral_radius=None, prob_dist='uni'
             w *= (spectral_radius / radius)
         else:
             w = np.zeros(size)
-        
+
     return w
 
 
@@ -80,15 +85,32 @@ def identity(x):
     return x
 
 
-def MackeyGlass(l, beta=0.2, gamma=0.1, tau=17, n=10, random_seed=None):
-    if random_seed:
+def MackeyGlass(l, beta=0.2, gamma=0.1, tau=17, n=10, initial_condition=None, random_seed=None):
+    if random_seed or initial_condition is None:
         np.random.seed(random_seed)
-    x = list(np.random.uniform(0.5, 1.2, tau))
-    for _ in range(l-tau):
-        new_value = x[-1] + beta*x[-tau]/(1+x[-tau]**n) - gamma*x[-1]
-        x.append(new_value)
+        initial_condition = np.random.uniform(0.5, 1.2, tau)
+    elif not isinstance(initial_condition, list):
+        initial_condition = np.array(initial_condition)
+
+    assert len(initial_condition) >= tau
+    assert l > tau
+
+    return MackeyGlassNumba(l, initial_condition, beta=beta, gamma=gamma, tau=tau, n=n)
+
+
+@numba.njit(parallel=True)
+def MackeyGlassNumba(l: int, initial_condition: np.ndarray, beta: float = 0.2, gamma: float = 0.1, tau: int = 17, n: int = 10):
+
+    x = np.zeros(shape=(l,))
+    x[:tau] = initial_condition[-tau:]
+
+    for i in range(tau, l):
+        x[i] = x[i-1] + beta*x[i-tau]/(1+x[i-tau]**n) - gamma*x[i-1]
 
     return x
+
+
+x = MackeyGlass(100)
 
 
 def expand_echo_matrix(echo=None, new_shape=None, new_matrix=None):
@@ -97,35 +119,153 @@ def expand_echo_matrix(echo=None, new_shape=None, new_matrix=None):
 
     if new_shape is None:
         new_shape = new_matrix.shape
-        
+
     new_echo = np.zeros(shape=(echo.shape[0]+new_shape[0], echo.shape[1]+new_shape[1]), dtype=np.float)
     new_echo[:echo.shape[0], :echo.shape[1]] = echo
     if new_matrix is not None:
         new_echo[echo.shape[0]:new_echo.shape[0], echo.shape[1]:new_echo.shape[1]] = new_matrix
     return new_echo
 
+
 def self_activation(radius=1):
     def ret_fun(x):
         return radius * x / np.linalg.norm(x)
     return ret_fun
 
+
 def make_kwargs_one_length(func):
     def f(*args, **kwargs):
         lengths = []
-        for k,v in kwargs.items():
+        for k, v in kwargs.items():
             if isinstance(v, list):
                 lengths.append(len(v))
             else:
                 kwargs[k] = [v]
                 lengths.append(1)
-                
+
         if len(set(lengths)) > 1:
             raise ValueError
 
         ma = max(lengths)
-        for k,v in kwargs.items():
+        for k, v in kwargs.items():
             if not isinstance(v, list):
                 kwargs[k] = [v for _ in range(ma)]
 
         return func(*args, **kwargs)
     return f
+
+
+def getWeights_FFD(d, thres):
+    w, k = [1.], 1
+    while True:
+        w_ = -w[-1]/k*(d-k+1)
+        if abs(w_) < thres:
+            break
+        w.append(w_)
+        k += 1
+    w = np.array(w[::-1])
+    return w
+
+
+def fracDiff(x, d=0.0, thres=1e-5):
+    """
+    param x: One dimensional array-like
+    param d >= 0.0 (default): Fractional differentiation parameter
+    param thres: threshold for weights cut of, default = 1e-5
+    Constant width window (new solution)
+    Note 1: thres determines the cut-off weight for the window
+    Note 2: d can be any positive fractional, not necessarily bounded [0,1]
+    """
+
+    x = np.array(x, dtype=np.float64).ravel()
+
+    w = getWeights_FFD(d, thres)
+    width = len(w)
+
+    a = np.lib.stride_tricks.as_strided(x, shape=(x.shape[0]-width, width), strides=(x.strides[0],)*2)
+
+    return np.dot(a, w)
+
+
+def minLossFracDiff(series, increment=0.01, alpha=0.01):
+    d = 0.0
+    while True:
+        try:
+            y = fracDiff(series, d)
+            adf_test = adfuller(y, maxlag=1, regression='c', autolag=None)
+            if adf_test[1] < alpha or d > 1.0:
+                break
+        except Exception:
+            pass
+        d += increment
+
+    return y, d
+
+
+class MultivariatePolynomial:
+
+    def __init__(self, coeff, input_dim, order):
+        self.coeff = coeff
+        self.size = self.num_params(input_dim, order)
+        self.input_dim = input_dim
+        self.order = order
+        if self.num_params(input_dim, order) != self.size:
+            raise ValueError(f"Mismatch of order({order}) and input_dim({input_dim}), coeff.shape[2] should be {self.size}")
+
+    def __call__(self, x):
+        """
+        Polynomials will be evaluated as follows:
+        Assume p of order 3: R^2 ---> R^n, x=(x1, x2) |--> p(x)
+        p(x) =  a_{0,0} + a_{0,1}*x2 + a_{0,2}*x2^2 +
+                a_{1,0}*x1 + a_{1,1}*x1*x2 + a_{1,2}*x1*x2^2
+                a_{2,0}*x1^2 + a_{2,1}*x1^2*x2
+        with a_{i,j} in R^n for all i,j <= 2
+        """
+        if x.ndim == 1:
+            if x.shape[0] == self.input_dim:
+                return self._eval(x)
+            elif self.input_dim == 1:
+                x = x.reshape((-1, 1))
+
+        return np.apply_along_axis(self._eval, axis=x.shape.index(self.input_dim), arr=x)
+
+    def _eval(self, x):
+        return np.einsum('ij..., i->j...', self.coeff, self.power(x))
+
+    def __repr__(self):
+        return f"MultivariatePolynomial: order={self.order}, input_dim={self.input_dim}"
+
+    @classmethod
+    def random(cls, shape, input_dim=1, order=1, sparsity=0.0, spectral_radius=None):
+        if spectral_radius:
+            spectral_radius /= order
+
+        if not isinstance(shape, tuple):
+            shape = (shape,)*2
+
+        num_params = cls.num_params(input_dim, order)
+
+        coeff = [random_echo_matrix(size=shape, sparsity=sparsity, spectral_radius=spectral_radius)
+                 for _ in range(num_params)]
+        coeff = np.array(coeff)
+        return cls(coeff, input_dim, order)
+
+    @staticmethod
+    def num_params(input_dim, order):
+        n, k = input_dim + order, order
+        return int(fac(n)/fac(n-k)/fac(k))
+
+    def power(self, base):
+        powers = list(product(range(self.order+1), repeat=base.shape[0]))
+        powers = list(filter(lambda x: sum(x) <= self.order, powers))
+        x = np.hstack([np.product(np.power(base, p)) for p in powers])
+        return x
+
+
+class MultivariateTrigoPolynomial(MultivariatePolynomial):
+
+    def power(self, base):
+        powers = list(product(range(self.order+1), repeat=base.shape[0]))
+        powers = list(filter(lambda x: sum(x) <= self.order, powers))
+        x = np.hstack([np.cos(np.sum(np.power(base, p))) for p in powers])
+        return x

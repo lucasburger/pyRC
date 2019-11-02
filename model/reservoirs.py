@@ -1,9 +1,11 @@
 import numpy as np
 from util import matrix_uniform, expand_echo_matrix, random_echo_matrix
 from util import make_kwargs_one_length
+from util import MultivariatePolynomial, MultivariateTrigoPolynomial, identity
 from numpy.lib.stride_tricks import as_strided
+from scipy import sparse
 from copy import deepcopy
-import multiprocessing as mp
+
 
 class BaseReservoir:
 
@@ -28,7 +30,7 @@ class BaseReservoir:
 
     def _set_state(self, x):
         self._state[:] = self.activation(x)
-    
+
     @property
     def state(self):
         return self._get_state()
@@ -41,17 +43,22 @@ class BaseReservoir:
     def size(self):
         return self._state.shape[0]
 
-class Reservoir(BaseReservoir):
 
-    def __init__(self, *args, bias=0.0, spectral_radius=0.95, sparsity=None, **kwargs):
+class ESNReservoir(BaseReservoir):
+
+    def __init__(self, *args, bias=0.0, spectral_radius=0.95, sparsity=None, allow_sparse_echo=True, **kwargs):
         super().__init__(*args, **kwargs)
         self._bias = bias
         assert spectral_radius > 0
-        if sparsity is None: sparsity = 0.5
+        if sparsity is None:
+            sparsity = 0.5
         self._spectral_radius = spectral_radius
         self._sparsity = sparsity
         self._echo = random_echo_matrix(size=(self.size, self.size), sparsity=sparsity, spectral_radius=spectral_radius)
+        if self.size > 500 and allow_sparse_echo:
+            self._echo = sparse.csr_matrix(self._echo)
         self._W_bias = matrix_uniform(self.size)
+        self.__bias = self._bias * self._W_bias
 
     @property
     def echo(self):
@@ -73,7 +80,7 @@ class Reservoir(BaseReservoir):
 
     def _get_sparsity(self):
         return self._sparsity
-    
+
     @property
     def sparsity(self):
         return self._get_sparsity()
@@ -81,11 +88,14 @@ class Reservoir(BaseReservoir):
     def _set_state(self, x):
         super()._set_state(np.dot(self._echo, self._state) + x.flatten() + self._bias * self._W_bias)
 
-class LeakyReservoir(Reservoir):
+
+class LeakyESNReservoir(ESNReservoir):
 
     def __init__(self, *args, leak=1.0, size=200, **kwargs):
         super().__init__(*args, size=size, **kwargs)
         self._leak = leak
+        if sparse.issparse(self._echo):
+            self._set_state = self._sparse_set_state
 
     def _get_leak(self):
         return self._leak
@@ -102,17 +112,24 @@ class LeakyReservoir(Reservoir):
         self._set_leak(x)
 
     def _set_state(self, x):
-        new_state = np.dot(self._echo, self._state) + x + self.bias * self._W_bias
+        new_state = np.dot(self._echo, self._state) + x + (self._bias + self._W_bias)
         self._state[:] = self.leak * self.activation(new_state) + (1 - self.leak) * self._state
+        return self._state
+
+    def _sparse_set_state(self, x):
+        new_state = self._echo * self._state + x + (self.bias * self._W_bias)
+        self._state[:] = self.leak * self.activation(new_state) + (1 - self.leak) * self._state
+        return self._state
 
     @property
     def input_size(self):
         return self.size
 
-class TopologicalReservoir(LeakyReservoir):
+
+class TopologicalReservoir(LeakyESNReservoir):
 
     _layer_dict = {
-        'output': True, 'input': False, 
+        'output': True, 'input': False,
         'sparsity': 0.5, 'size': 200,
         'leak': 1.0, 'bias': 0.0}
 
@@ -125,14 +142,14 @@ class TopologicalReservoir(LeakyReservoir):
 
     def add_layer(self, **kwargs):
 
-        # append index to dict with key depth + 1 
+        # append index to dict with key depth + 1
         size = kwargs.get('size', 200)
 
         new_layer = self._layer_dict.copy()
         new_layer.update(kwargs)
         self.layers[self.num_layers] = new_layer
 
-        if kwargs.get('input', False): 
+        if kwargs.get('input', False):
             self._input_indices = np.hstack((self._input_indices, np.arange(self.size, self.size+size, dtype=int)))
 
         echo_matrix_kwargs = {
@@ -158,9 +175,10 @@ class TopologicalReservoir(LeakyReservoir):
         return np.copy(self._echo_view[layer_from, layer_to])
 
     def set_connection(self, layer_from, layer_to=None, matrix=None, **kwargs):
-        if layer_to is None: layer_to = layer_from
-        if matrix is None: 
-            matrix = random_echo_matrix(size=(self.layers[layers_from]['size'],self.layers[layer_to]['size']), **kwargs)
+        if layer_to is None:
+            layer_to = layer_from
+        if matrix is None:
+            matrix = random_echo_matrix(size=(self.layers[layers_from]['size'], self.layers[layer_to]['size']), **kwargs)
         self._echo_view[layer_from, layer_to][:, :] = matrix
 
     def update(self, input_array):
@@ -177,17 +195,17 @@ class TopologicalReservoir(LeakyReservoir):
         if len(set(sizes)) == 1:
             size = self.layers[0]['size']
             shape = (self.num_layers, self.num_layers, size, size)
-            strides = ( size * self._echo.strides[0] , size * self._echo.strides[1]) + self._echo.strides
+            strides = (size * self._echo.strides[0], size * self._echo.strides[1]) + self._echo.strides
             return as_strided(self._echo, shape=shape, strides=strides)
         else:
             inds = [0] + np.cumsum(sizes).tolist()
             l = [
                 [
-                self._echo[slice(i_from, j_from), slice(i_to, j_to)] 
-                for i_to, j_to in zip(inds[:-1], inds[1:])
+                    self._echo[slice(i_from, j_from), slice(i_to, j_to)]
+                    for i_to, j_to in zip(inds[:-1], inds[1:])
                 ]
                 for i_from, j_from in zip(inds[:-1], inds[1:])
-                ]   
+            ]
             return np.array(l)
 
     def __state_view(self):
@@ -245,8 +263,9 @@ class TopologicalReservoir(LeakyReservoir):
     def _get_state(self):
         return np.hstack(self._state_view[self.output_layers])
 
-class ReservoirArray:
-    
+
+class ESNReservoirArray:
+
     def __init__(self, *args, **kwargs):
         self.reservoirs = list()
         if kwargs:
@@ -255,8 +274,8 @@ class ReservoirArray:
     @make_kwargs_one_length
     def add_reservoir(self, **kwargs):
         for new_kwargs in [{k: v[i] for k, v in kwargs.items()} for i in range(max(map(len, kwargs.values())))]:
-            self.reservoirs.append(LeakyReservoir(**new_kwargs))
-        
+            self.reservoirs.append(LeakyESNReservoir(**new_kwargs))
+
         assert len(list(set(r.size for r in self.reservoirs))) == 1
 
     def update(self, input_array):
@@ -276,11 +295,12 @@ class ReservoirArray:
     @property
     def state(self):
         return self._get_state()
-    
+
     def _get_state(self):
         return np.hstack([r.state for r in self.reservoirs])
 
-class DeepReservoir(ReservoirArray):
+
+class DeepESNReservoir(ESNReservoirArray):
 
     def __init__(self):
         super().__init__()
@@ -288,7 +308,7 @@ class DeepReservoir(ReservoirArray):
         self.input_layers = list()
         self.output_layers = list()
 
-    @make_kwargs_one_length 
+    @make_kwargs_one_length
     def add_layer(self, **kwargs):
         for new_kwargs in [{k: v[i] for k, v in kwargs.items()} for i in range(max(map(len, kwargs.values())))]:
             if new_kwargs.pop('input', False) or self.depth == 0:
@@ -333,3 +353,33 @@ class DeepReservoir(ReservoirArray):
     def echo(self):
         return np.block([r.echo for r in self.reservoirs])
 
+
+class SASReservoir(BaseReservoir):
+
+    def __init__(self, *args, p=1, q=1, sparsity=None, lambda_max=0.95, allow_sparse_coefficients=True, **kwargs):
+        super().__init__(*args, activation=identity, **kwargs)
+
+        assert 0 < lambda_max < 1
+        if sparsity is None:
+            sparsity = 1-float(1/self.size) if self.size > 50 else 0.9
+        self.p = MultivariatePolynomial.random(shape=(self.size, self.size), input_dim=1, order=p, sparsity=sparsity, spectral_radius=lambda_max)
+        self.q = MultivariatePolynomial.random(shape=(self.size,), input_dim=1, order=q)
+
+    def update(self, x):
+        x = x.reshape((-1, 1))
+        return np.apply_along_axis(super().update, axis=1, arr=x)
+
+    def _update_state(self, x):
+        return super()._set_state(np.dot(self.p(x), self._state) + self.q(x))
+
+
+class TrigoSASReservoir(SASReservoir):
+
+    def __init__(self, *args, p=1, q=1, sparsity=None, lambda_max=0.95, allow_sparse_coefficients=True, **kwargs):
+        super().__init__(*args, activation=identity, **kwargs)
+
+        assert 0 < lambda_max < 1
+        if sparsity is None:
+            sparsity = 1-float(1/self.size) if self.size > 50 else 0.9
+        self.p = MultivariateTrigoPolynomial.random(shape=(self.size, self.size), input_dim=1, order=p, sparsity=sparsity, spectral_radius=lambda_max)
+        self.q = MultivariateTrigoPolynomial.random(shape=(self.size,), input_dim=1, order=q)

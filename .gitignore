@@ -2,6 +2,8 @@
 /figures
 /dump
 /.vscode
+/.ipynb_checkpoints
+/__pycache__
 
 .DS_Store
 
@@ -12,3 +14,4 @@ To-Dos.txt
 
 *OLD*.py
 *.pyc
+*.ipynb
