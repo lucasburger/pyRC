@@ -380,7 +380,3 @@ class TrigoSASReservoir(SASReservoir):
 
         self.p = MultivariateTrigoPolynomial(self.p.coeff, self.p.input_dim, self.p.order)
         self.q = MultivariateTrigoPolynomial(self.q.coeff, self.q.input_dim, self.q.order)
-
-
-class foo:
-    pass
