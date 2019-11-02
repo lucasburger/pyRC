@@ -178,7 +178,7 @@ class TopologicalReservoir(LeakyESNReservoir):
         if layer_to is None:
             layer_to = layer_from
         if matrix is None:
-            matrix = random_echo_matrix(size=(self.layers[layers_from]['size'], self.layers[layer_to]['size']), **kwargs)
+            matrix = random_echo_matrix(size=(self.layers[layer_from]['size'], self.layers[layer_to]['size']), **kwargs)
         self._echo_view[layer_from, layer_to][:, :] = matrix
 
     def update(self, input_array):
@@ -378,5 +378,5 @@ class TrigoSASReservoir(SASReservoir):
     def __init__(self, *args, input_dim=1, p=1, q=1, **kwargs):
         super().__init__(*args, activation=identity, **kwargs)
 
-        self.p = MultivariateTrigoPolynomial.random(shape=(self.size, self.size), input_dim=1, order=p, sparsity=sparsity, spectral_radius=lambda_max)
-        self.q = MultivariateTrigoPolynomial.random(shape=(self.size,), input_dim=1, order=q)
+        self.p = MultivariateTrigoPolynomial(self.p.coeff, self.p.input_dim, self.p.order)
+        self.q = MultivariateTrigoPolynomial(self.q.coeff, self.q.input_dim, self.q.order)
