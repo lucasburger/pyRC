@@ -5,12 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
-np.random.seed(42)
-
 l = 2000  # length of mackey glass timeseries
-mg = MackeyGlass(l, drop_out=0.1)
+mg = MackeyGlass(l, drop_out=0.1).reshape((-1, 1))
 mg -= np.mean(mg)  # demean
-mg = mg.reshape((-1, 1))  # reshape to column vector
+mg = mg  # reshape to column vector
 
 # split into burn_in, train and test parts
 num_test = 500
