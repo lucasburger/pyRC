@@ -1,5 +1,7 @@
 # pyRC
 
+
+## The Library
 This Reservoir Computing library includes:
 
 ### Echo State Networks
@@ -8,11 +10,41 @@ This Reservoir Computing library includes:
 - (Arbitrary) Topological ESN
 - Parallel ESN
 
-### State Affine Systems [Grigoryeva and Ortega (2018)](https://arxiv.org/pdf/1712.00754.pdf)
+### State Affine Systems
 
+[Grigoryeva and Ortega (2018)](https://arxiv.org/pdf/1712.00754.pdf)
 - Polynomial SAS
 - Trigonometric SAS
 
+### Output Models
+
+Output models can basically be chosen from any can be specified separately and have to have the following form:
+
+`from abc import ABCMeta, abstractmethod
 
 
-Output models can be chosen from the sklearn.linear_models library.
+class BaseOutputModel:
+    __metaclass__ = ABCMeta
+    error = None
+
+    @abstractmethod
+    def fit(self, x, y):
+        """
+        This function must be overridden by subclasses.
+        """
+        pass
+
+    @abstractmethod
+    def predict(self, x):
+        """
+        This function must be overridden by subclasses.
+        """
+        pass
+`
+
+
+## Examples
+
+`This is code`
+
+

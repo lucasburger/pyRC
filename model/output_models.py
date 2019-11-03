@@ -4,8 +4,9 @@ from sklearn.linear_model import RidgeCV, RidgeClassifier, Lars
 import sklearn.linear_model
 from copy import deepcopy
 import util
-from abc import ABCMeta, abstractmethod
 import numba
+
+from abc import ABCMeta, abstractmethod
 
 
 class BaseOutputModel:
