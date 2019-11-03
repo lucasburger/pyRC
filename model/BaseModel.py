@@ -5,12 +5,14 @@ from model.output_models import RidgeRegressionCV
 from model.reservoirs import BaseReservoir
 from model.scaler import tanh, identity
 import util
+import optimizer
 
 
-class ReservoirModel:
+class ReservoirModel(object):
 
     """
-    This class is the self-written implementation of the Echo State Network
+    This class is base model for any Reservoir computing model. Main difference will be the attribute _reservoir_class,
+    which creates an EchoStateNetwork if set to ESNReservoir or a StateAffineSytem if set to SARReservoir
     """
     _reservoir_class = BaseReservoir
 
@@ -66,7 +68,8 @@ class ReservoirModel:
         #    return np.apply_along_axis(self.update, axis=1, arr=input_array, reservoir=reservoir)
 
     def train(self, feature, burn_in_feature=None, burn_in_split=0.1, teacher=None,
-              error_fun=util.RMSE, hyper_tuning=False):
+              error_fun=util.RMSE, hyper_tuning=False,
+              dimensions=None, minimizer=None, exclude_hyper=None):
         """
         Training of the network
         :param feature: features for the training
@@ -80,6 +83,8 @@ class ReservoirModel:
             burn_in_ind = int(burn_in_split * feature.shape[0])
             burn_in_feature = feature[:burn_in_ind, :]
             feature = feature[burn_in_ind:, :]
+            if teacher is not None:
+                teacher = teacher[burn_in_ind:, :]
 
         if teacher is None:
             teacher = feature[1:, :]
@@ -90,6 +95,17 @@ class ReservoirModel:
         self.teacher = teacher
 
         self.W_in = util.matrix_uniform(self._feature.shape[-1], self.reservoir.input_size)
+
+        r = result_dict = None
+        if hyper_tuning:
+            r, result_dict = optimizer.optimizer(self, error_fun=error_fun, dimensions=dimensions,
+                                                 minimizer=minimizer, exclude_hyper=exclude_hyper)
+
+        self._train()
+
+        return r, result_dict
+
+    def _train(self):
 
         self.update(self._burn_in_feature)
         x = self.update(self._feature)
@@ -148,12 +164,19 @@ class ReservoirModel:
     def output_to_input(self, x):
         return self.input_activation(self.input_scaler.scale(self.output_scaler.unscale(x)))
 
+    def set_params(self, **params):
+        for name, value in params.items():
+            if hasattr(self.reservoir, name):
+                setattr(self.reservoir, name, value)
+            elif hasattr(self, name):
+                self.__setattr__(name, value)
+
     """
     The following are helper functions as well as attribute setters and getters
     """
 
     def __repr__(self):
-        return f"(ReservoirModel: N={self.size}, " + repr(self.reservoir) + ")"
+        return f"({self.__class__.__name__}: N={self.size}, " + repr(self.reservoir) + ")"
 
     @property
     def n_inputs(self):
@@ -182,6 +205,10 @@ class ReservoirModel:
     @property
     def sparsity(self):
         return self.reservoir.sparsity
+
+    @property
+    def hyper_params(self):
+        return self.reservoir.hyper_params
 
     @property
     def burn_in_feature(self):

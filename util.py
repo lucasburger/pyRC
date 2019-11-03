@@ -6,6 +6,13 @@ from math import factorial as fac
 from itertools import product
 
 
+def update_hyperparams(old, new):
+    old = {k: ([v] if not isinstance(v, list) else v) for k, v in old.items()}
+    new = {k: ([v] if not isinstance(v, list) else v) for k, v in new.items()}
+    d = {k: old.get(k, []) + new.get(k, []) for k in (set(list(old.keys()) + list(new.keys())))}
+    return d
+
+
 def matrix_normal(s1, s2=None, loc=0, scale=1):
 
     if isinstance(s1, tuple):
@@ -85,7 +92,7 @@ def identity(x):
     return x
 
 
-def MackeyGlass(l, beta=0.2, gamma=0.1, tau=17, n=10, initial_condition=None, random_seed=None):
+def MackeyGlass(l, beta=0.2, gamma=0.1, tau=17, n=10, drop_out=0.1, initial_condition=None, random_seed=None):
     if random_seed or initial_condition is None:
         np.random.seed(random_seed)
         initial_condition = np.random.uniform(0.5, 1.2, tau)
@@ -95,7 +102,8 @@ def MackeyGlass(l, beta=0.2, gamma=0.1, tau=17, n=10, initial_condition=None, ra
     assert len(initial_condition) >= tau
     assert l > tau
 
-    return MackeyGlassNumba(l, initial_condition, beta=beta, gamma=gamma, tau=tau, n=n)
+    mg = MackeyGlassNumba(l, initial_condition, beta=beta, gamma=gamma, tau=tau, n=n)
+    return mg[int(l*drop_out):]
 
 
 @numba.njit(parallel=True)
@@ -136,6 +144,9 @@ def self_activation(radius=1):
 def make_kwargs_one_length(func):
     def f(*args, **kwargs):
         lengths = []
+        if len(kwargs) == 0:
+            return func(*args, **kwargs)
+
         for k, v in kwargs.items():
             if isinstance(v, list):
                 lengths.append(len(v))
@@ -204,13 +215,11 @@ def minLossFracDiff(series, increment=0.01, alpha=0.01):
 
 class MultivariatePolynomial:
 
-    def __init__(self, coeff, input_dim, order):
+    def __init__(self, input_dim, order, coeff=None):
         self.coeff = coeff
-        self.size = self.num_params(input_dim, order)
         self.input_dim = input_dim
         self.order = order
-        if self.num_params(input_dim, order) != self.size:
-            raise ValueError(f"Mismatch of order({order}) and input_dim({input_dim}), coeff.shape[2] should be {self.size}")
+        self.size = self.num_params
 
     def __call__(self, x):
         """
@@ -230,10 +239,10 @@ class MultivariatePolynomial:
         return np.apply_along_axis(self._eval, axis=x.shape.index(self.input_dim), arr=x)
 
     def _eval(self, x):
-        return np.einsum('ij..., i->j...', self.coeff, self.power(x))
+        return np.einsum('ij..., i->j...', self.coeff, self.param_factors(x))
 
     def __repr__(self):
-        return f"MultivariatePolynomial: order={self.order}, input_dim={self.input_dim}"
+        return f"{self.__class__.__name__}: order={self.order}, input_dim={self.input_dim}"
 
     @classmethod
     def random(cls, shape, input_dim=1, order=1, sparsity=0.0, spectral_radius=None):
@@ -243,19 +252,20 @@ class MultivariatePolynomial:
         if not isinstance(shape, tuple):
             shape = (shape,)*2
 
-        num_params = cls.num_params(input_dim, order)
+        r = cls(input_dim, order)
+
+        num_params = r.num_params
 
         coeff = [random_echo_matrix(size=shape, sparsity=sparsity, spectral_radius=spectral_radius)
                  for _ in range(num_params)]
-        coeff = np.array(coeff)
-        return cls(coeff, input_dim, order)
+        r.coeff = np.array(coeff)
+        return r
 
-    @staticmethod
-    def num_params(input_dim, order):
-        n, k = input_dim + order, order
-        return int(fac(n)/fac(n-k)/fac(k))
+    @property
+    def num_params(self):
+        return len(self.param_factors(np.zeros(shape=(self.input_dim, ))))
 
-    def power(self, base):
+    def param_factors(self, base):
         powers = list(product(range(self.order+1), repeat=base.shape[0]))
         powers = list(filter(lambda x: sum(x) <= self.order, powers))
         x = np.hstack([np.product(np.power(base, p)) for p in powers])
@@ -264,8 +274,8 @@ class MultivariatePolynomial:
 
 class MultivariateTrigoPolynomial(MultivariatePolynomial):
 
-    def power(self, base):
-        powers = list(product(range(self.order+1), repeat=base.shape[0]))
-        powers = list(filter(lambda x: sum(x) <= self.order, powers))
-        x = np.hstack([np.cos(np.sum(np.power(base, p))) for p in powers])
+    def param_factors(self, base):
+        factors = list(product(range(self.order+1), repeat=base.shape[0]))
+        factors = list(filter(lambda x: sum(x) <= self.order, factors))
+        x = np.hstack([np.cos(np.sum(base * p)) for p in factors])
         return x
