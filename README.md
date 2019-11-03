@@ -20,7 +20,7 @@ This Reservoir Computing library includes:
 
 Output models can basically be chosen from any can be specified separately and have to have the following form:
 
-`
+`   
     from abc import ABCMeta, abstractmethod
 
 
@@ -46,7 +46,7 @@ Output models can basically be chosen from any can be specified separately and h
 
 ## Examples
 
-`
+`   
     from model.EchoStateNetwork import EchoStateNetwork as ESN
     from util import MackeyGlass, RMSE
     import numpy as np
