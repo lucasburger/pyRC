@@ -118,6 +118,7 @@ def MackeyGlassNumba(l: int, initial_condition: np.ndarray, beta: float = 0.2, g
     return x
 
 
+# this just compiles MackeyGlassNumba to be used later on
 x = MackeyGlass(100)
 
 
@@ -272,7 +273,7 @@ class MultivariateFunction:
 class MultivariatePolynomial(MultivariateFunction):
 
     def param_factors(self, base):
-        """
+        r"""
         Combinations of powers with sum of exponents less than the order of the polynomial
         e.g.: prod_{i_k \in {0,...,order} sum(i_k) < order} x_{k}^{i_k}
         """
@@ -285,7 +286,7 @@ class MultivariatePolynomial(MultivariateFunction):
 class MultivariateTrigoPolynomial(MultivariateFunction):
 
     def param_factors(self, base):
-        """
+        r"""
         Combinations of factors with sum of exponents less than the order of the polynomial
         e.g.: sum_{i_k \in {0,...,order} sum(i_k) < order} i_k * x_k
         """

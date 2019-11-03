@@ -20,7 +20,7 @@ test_teacher = mg[-num_test:]
 
 
 # set up ESN and train
-e = ESN(**json.load(open('demo_specs.json', 'r')))
+e = ESN()
 r, result_dict = e.train(feature=train_feature, teacher=train_teacher, hyper_tuning=False)
 
 # forecast
