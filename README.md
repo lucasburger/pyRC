@@ -1,19 +1,18 @@
 # pyRC
 
-## What do you get?
 This Reservoir Computing library includes:
 
 ### Echo State Networks
 - (Leaky-Integrator) ESN
-- Deep ESN
-- (arbitrary) topological ESN
+- Deep ESN [Gallicchio and Micheli (2017)](https://arxiv.org/abs/1712.04323)
+- (Arbitrary) Topological ESN
 - Parallel ESN
 
-### State Affine Systems
+### State Affine Systems [Grigoryeva and Ortega (2018)](https://arxiv.org/pdf/1712.00754.pdf)
 
-- (multidimensional) Polynomial SAS
-- (multidimensional) Trigonometric SAS
+- Polynomial SAS
+- Trigonometric SAS
 
-Additionally, StateAffineSystems are provided based on multidimensional polynomials and trigonometric polynomials.
+
 
 Output models can be chosen from the sklearn.linear_models library.
