@@ -213,7 +213,7 @@ def minLossFracDiff(series, increment=0.01, alpha=0.01):
     return y, d
 
 
-class MultivariatePolynomial:
+class MultivariateFunction:
 
     def __init__(self, input_dim, order, coeff=None):
         self.coeff = coeff
@@ -266,15 +266,29 @@ class MultivariatePolynomial:
         return len(self.param_factors(np.zeros(shape=(self.input_dim, ))))
 
     def param_factors(self, base):
+        raise NotImplementedError
+
+
+class MultivariatePolynomial(MultivariateFunction):
+
+    def param_factors(self, base):
+        """
+        Combinations of powers with sum of exponents less than the order of the polynomial
+        e.g.: prod_{i_k \in {0,...,order} sum(i_k) < order} x_{k}^{i_k}
+        """
         powers = list(product(range(self.order+1), repeat=base.shape[0]))
         powers = list(filter(lambda x: sum(x) <= self.order, powers))
         x = np.hstack([np.product(np.power(base, p)) for p in powers])
         return x
 
 
-class MultivariateTrigoPolynomial(MultivariatePolynomial):
+class MultivariateTrigoPolynomial(MultivariateFunction):
 
     def param_factors(self, base):
+        """
+        Combinations of factors with sum of exponents less than the order of the polynomial
+        e.g.: sum_{i_k \in {0,...,order} sum(i_k) < order} i_k * x_k
+        """
         factors = list(product(range(self.order+1), repeat=base.shape[0]))
         factors = list(filter(lambda x: sum(x) <= self.order, factors))
         x = np.hstack([np.cos(np.sum(base * p)) for p in factors])
