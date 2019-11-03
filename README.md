@@ -20,7 +20,7 @@ This Reservoir Computing library includes:
 
 Output models can basically be chosen from any can be specified separately and have to have the following form:
 
-`   
+ ```python
     from abc import ABCMeta, abstractmethod
 
 
@@ -41,12 +41,12 @@ Output models can basically be chosen from any can be specified separately and h
             This function must be overridden by subclasses.
             """
             pass
-`
+```
 
 
 ## Examples
 
-`   
+```python
     from model.EchoStateNetwork import EchoStateNetwork as ESN
     from util import MackeyGlass, RMSE
     import numpy as np
@@ -81,6 +81,6 @@ Output models can basically be chosen from any can be specified separately and h
     plt.legend(['target', 'fitted', 'forecast'])
     plt.title(f"Train Error = {e.error:0.6f}, Test Error = {test_error:0.6f}")
     plt.show(block=True)
-`
+```
 
 
