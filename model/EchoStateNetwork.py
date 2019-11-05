@@ -2,7 +2,6 @@
 from copy import copy
 import numpy as np
 from model.BaseModel import ReservoirModel
-from model.output_models import RidgeRegressionCV
 from model.reservoirs import LeakyESNReservoir, DeepESNReservoir, ESNReservoirArray
 from model.scaler import tanh, identity
 import util

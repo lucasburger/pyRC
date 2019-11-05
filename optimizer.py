@@ -65,7 +65,7 @@ def optimizer(model, error_fun=None, dimensions=None, minimizer=None, exclude_hy
             hyper_dimensions.pop(eh)
 
     default_minimizer = {'optimizer': gbrt_minimize,
-                         'n_calls': 25*len(hyper_dimensions),
+                         'n_calls': 50*len(hyper_dimensions),
                          'acq_func': 'EI'}
 
     if minimizer is not None:
@@ -86,6 +86,16 @@ def optimizer(model, error_fun=None, dimensions=None, minimizer=None, exclude_hy
         e.reservoir.reset()
 
         error = e._train().error
+        try:
+            error = error['outofsample']
+        except IndexError:
+            pass
+
+        try:
+            cv_scores = e.output_model.cv_values_
+            error = np.min(np.mean(cv_scores, axis=error.shape[:-1]))
+        except AttributeError:
+            pass
 
         if error is None or np.isnan(error) or np.isinf(error):
             error = 10000000

@@ -17,7 +17,7 @@ class BaseReservoir:
         return deepcopy(self)
 
     def reset(self):
-        self._state = np.zeros(shape=(self.size,), dtype=np.float64)
+        self._state[:] = 0
 
     def update(self, input_array):
         if input_array.ndim == 1 or self.size in input_array.shape and 1 in input_array.shape:
@@ -56,13 +56,13 @@ class ESNReservoir(BaseReservoir):
     hyper_params = {'spectral_radius': (0.0, 3.0),
                     'bias': (-1.0, 1.0)}
 
-    def __init__(self, *args, bias=0.0, spectral_radius=0.95, sparsity=None, allow_sparse_echo=True, **kwargs):
+    def __init__(self, *args, bias=0.0, spectral_radius=0.5, sparsity=None, allow_sparse_echo=True, **kwargs):
         super().__init__(*args, **kwargs)
         self._bias = bias
         assert spectral_radius > 0
 
         if sparsity is None:
-            sparsity = 1-float(1/self.size) if self.size > 50 else 0.9
+            sparsity = 1-float(10/self.size) if self.size > 50 else 0.9
 
         self._spectral_radius = spectral_radius
         self._sparsity = sparsity
@@ -99,7 +99,7 @@ class ESNReservoir(BaseReservoir):
 
     @spectral_radius.setter
     def spectral_radius(self, other):
-        self._set_spectral_radius
+        self._set_spectral_radius(other)
 
     def _set_spectral_radius(self, other):
         self._echo *= other/self._spectral_radius
@@ -134,8 +134,8 @@ class LeakyESNReservoir(ESNReservoir):
         return self._leak
 
     @leak.setter
-    def leak(self, x):
-        self._set_leak(x)
+    def leak(self, other):
+        self._set_leak(other)
 
     def _set_leak(self, x):
         self._leak = min([abs(x), 1.0])
@@ -328,20 +328,18 @@ class TrigoSASReservoir(SASReservoir):
 class ESNReservoirArray:
 
     hyper_params = {}
+    _fixed_size = None
 
     def __init__(self, *args, **kwargs):
         self.reservoirs = list()
         if kwargs:
             self.add_reservoir(**kwargs)
+            self.fixed_size = self.reservoirs[-1].size
 
-    @make_kwargs_one_length
     def add_reservoir(self, **kwargs):
-        for new_kwargs in [{k: v[i] for k, v in kwargs.items()} for i in range(max(map(len, kwargs.values())))]:
-            new_res = LeakyESNReservoir(**new_kwargs)
-            self.reservoirs.append(new_res)
-            self.hyper_params = update_hyperparams(self.hyper_params, new_res.hyper_params)
-
-        assert len(list(set(r.size for r in self.reservoirs))) == 1
+        new_res = LeakyESNReservoir(**kwargs)
+        self.reservoirs.append(new_res)
+        self.hyper_params = update_hyperparams(self.hyper_params, new_res.hyper_params)
 
     def update(self, input_array):
         return np.hstack([r.update(input_array) for r in self.reservoirs])
@@ -365,18 +363,64 @@ class ESNReservoirArray:
 
     @property
     def input_size(self):
-        return self.reservoirs[0].size
+        return self._fixed_size
 
     @property
     def state(self):
         return self._get_state()
 
+    def _get_state(self):
+        return np.hstack([r.state for r in self.reservoirs])
+
     @property
     def spectral_radius(self):
         return [r.spectral_radius for r in self.reservoirs]
 
-    def _get_state(self):
-        return np.hstack([r.state for r in self.reservoirs])
+    @spectral_radius.setter
+    def spectral_radius(self, other):
+        if isinstance(other, float):
+            for r in self.reservoirs:
+                r.spectral_radius = other
+        else:
+            for i, sr in enumerate(other):
+                self.reservoirs[i].spectral_radius = sr
+
+    @property
+    def bias(self):
+        return [r.bias for r in self.reservoirs]
+
+    @bias.setter
+    def bias(self, other):
+        if isinstance(other, float):
+            for r in self.reservoirs:
+                r.bias = other
+        else:
+            for i, b in enumerate(other):
+                self.reservoirs[i].bias = b
+
+    @property
+    def leak(self):
+        return [r.leak for r in self.reservoirs]
+
+    @leak.setter
+    def leak(self, other):
+        if isinstance(other, float):
+            for r in self.reservoirs:
+                r.leak = other
+        else:
+            for i, l in enumerate(other):
+                self.reservoirs[i].leak = l
+
+    @property
+    def fixed_size(self):
+        return self._fixed_size
+
+    @fixed_size.setter
+    def fixed_size(self, other):
+        if self._fixed_size is None:
+            self._fixed_size = other
+        else:
+            raise ValueError(f"fixed size for reservoir array already set {self._fixed_size}")
 
 
 class DeepESNReservoir(ESNReservoirArray):

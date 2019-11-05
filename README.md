@@ -21,7 +21,7 @@ This Reservoir Computing library includes:
 Output models can basically be chosen from any [scikit-learn](https://scikit-learn.org/stable/) model having a fit and predict method. Alternatively, they can be specified separately and, for convenience, can derive from model.output_models.BaseOutputModel:
 
  ```python
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, abstractproperty
 
 
 class BaseOutputModel:
@@ -40,6 +40,11 @@ class BaseOutputModel:
         This function must be overridden by subclasses.
         """
         pass
+
+    @abstractproperty
+    def error(self):
+        pass
+
 ```
 ### Hyperparameter Optimization
 

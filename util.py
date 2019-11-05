@@ -65,22 +65,23 @@ def random_echo_matrix(size, sparsity=0.0, spectral_radius=None, prob_dist='uni'
     return w
 
 
-def ts_split(n, test_set_size=5, test_length=1):
+def ts_split(n, test_set_size=1, test_sets=1):
+
+    if test_set_size < 1:
+        test_set_size = int(test_set_size*n)
+
     i = 0
-    while i <= test_set_size:
-        tr_s = i
-        tr_e = n - test_set_size + i*test_length
+    while i < test_sets:
+        train_start = i*test_set_size
+        train_end = n - test_set_size*(test_sets-i)
 
-        te_s = tr_e + 1
-        te_e = te_s + test_length
+        test_start = train_end
+        test_end = test_start + test_set_size
 
-        if te_e > n:
-            break
-        else:
-            idtrain = np.arange(tr_s, tr_e, dtype=int)
-            idtest = np.arange(te_s, te_e, dtype=int)
-            yield idtrain, idtest
-            i += 1
+        idtrain = np.arange(train_start, train_end, dtype=int)
+        idtest = np.arange(test_start, test_end, dtype=int)
+        yield idtrain, idtest
+        i += 1
 
 
 def RMSE(x, y=None):

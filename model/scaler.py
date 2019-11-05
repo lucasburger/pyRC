@@ -3,8 +3,11 @@ from abc import abstractmethod
 from numpy import tanh as tanh_org
 from numpy import arctanh as arctanh_org
 
+import inspect
+
+
 class BaseScaler():
-    
+
     @abstractmethod
     def scale(self, x):
         pass
@@ -28,7 +31,7 @@ class tanh:
 
 class identity:
     __metaclass__ = BaseScaler
-        
+
     @staticmethod
     def scale(x):
         return x
