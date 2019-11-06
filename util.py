@@ -244,7 +244,7 @@ class MultivariateFunction:
         return np.einsum('ij..., i->j...', self.coeff, self.param_factors(x))
 
     def __repr__(self):
-        return f"{self.__class__.__name__}: order={self.order}, input_dim={self.input_dim}"
+        return "{}: order={}, input_dim={}".format(self.__class__.__name__, self.order, self.input_dim)
 
     @classmethod
     def random(cls, shape, input_dim=1, order=1, sparsity=0.0, spectral_radius=None):

@@ -12,7 +12,7 @@ class EchoStateNetwork(ReservoirModel):
     _reservoir_class = LeakyESNReservoir
 
     def __repr__(self):
-        return f"({self.__class__.__name__}: N={self.size}, SR={self.spectral_radius})"
+        return "({}: N={}, SR={})".format(self.__class__.__name__, self.size, self.spectral_radius)
 
 
 class deepESN(EchoStateNetwork):

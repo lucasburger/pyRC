@@ -176,7 +176,10 @@ class ReservoirModel(object):
             if inject_error:
                 _feature += np.random.choice(self._errors, 1)
 
-        return prediction, states
+        if return_states:
+            return prediction, states
+        else:
+            return prediction
 
     def output_to_input(self, x):
         return self.input_activation(self.input_scaler.scale(self.output_scaler.unscale(x)))
@@ -193,7 +196,7 @@ class ReservoirModel(object):
     """
 
     def __repr__(self):
-        return f"({self.__class__.__name__}: N={self.size}, " + repr(self.reservoir) + ")"
+        return "({}: N={}, ".format(self.__class__.__name__, self.size) + repr(self.reservoir) + ")"
 
     @property
     def n_inputs(self):

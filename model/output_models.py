@@ -78,6 +78,26 @@ class MinEigenvalueRegression(BaseOutputModel):
         if y.ndim == 1:
             y = y.reshape((-1, 1))
 
+        if self.ts_split is None:
+            self.ts_split = util.ts_split(x.shape[0], test_set_size=0.1)
+
+        errors = []
+        for id_train, id_test in self.ts_split:
+            x_train, y_train = x[id_train, :], y[id_train, :]
+            x_test, y_test = x[id_test, :], y[id_test, :]
+
+            xxt = np.dot(x_train.T, x_train)
+
+            self.regularize_lambda = self.min_eigenvalue - min(np.linalg.eigvals(xxt))
+
+            if isinstance(self.regularize_lambda, complex):
+                self.regularize_lambda = np.real(self.regularize_lambda)
+
+            beta = np.linalg.pinv(xxt + self.regularize_lambda * self.size * np.eye(self.size)) @ x_train.T @ y_train
+            errors.append(util.RMSE(np.dot(x_test, beta), y_test))
+
+        self.error = np.mean(errors)
+
         xx = np.dot(x.T, x)
 
         self.regularize_lambda = self.min_eigenvalue - min(np.linalg.eigvals(xx))
@@ -86,8 +106,8 @@ class MinEigenvalueRegression(BaseOutputModel):
             self.regularize_lambda = np.real(self.regularize_lambda)
 
         self.beta = np.linalg.pinv(xx + self.regularize_lambda * self.size * np.eye(self.size)) @ x.T @ y
-        self.fitted = np.dot(x, self.beta)
-        self.error = util.RMSE(self.fitted, y)
+        #self.fitted = np.dot(x, self.beta)
+        #self.error = util.RMSE(self.fitted, y)
 
         return
 

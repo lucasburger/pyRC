@@ -1,8 +1,19 @@
 # pyRC
 
+# Preliminaries
+
+This library was written in Python 3 and contains codes, that is not compatible with Python 2.7. However, changing a few lines and import statements will make it work with both versions.
+
+## Installation
+
+Using git:
+
+````
+git clone https://github.com/lucasburger/pyRC.git
+pip3 install -r requirements.txt
+````
 
 ## The Library
-This Reservoir Computing library includes:
 
 ### Echo State Networks
 - (Leaky-Integrator) ESN
@@ -50,8 +61,11 @@ class BaseOutputModel:
 
 Although, Reservoir Computers are lightweight in terms of training, the optimization of hyperparameters - as with any machine learning algorithm - bares some challenge.
 Automatic optimization is performed using the library [scikit-optimize](https://scikit-optimize.github.io) which is unfortunately not maintained anymore.
+You can let the optimizer choose the hyperparameters (i.e. spectral radius, bias or leak) by setting the ```tune_hyper=True```when calling the train method.
 
 ## Examples
+
+This is a very basic example of training a leaky-integrator ESN on the [Mackey-Glass chaotic timeseries](http://www.scholarpedia.org/article/Mackey-Glass_equation) with common parameter choice $\tau = 17$.
 
 ```python
 from model.EchoStateNetwork import EchoStateNetwork as ESN
@@ -75,7 +89,7 @@ e = ESN()
 r, result_dict = e.train(feature=train_feature, teacher=train_teacher, hyper_tuning=False)
 
 # forecast
-pred = e.predict(n_predictions=num_test, inject_error=False, simulation=True)
+pred = e.predict(n_predictions=num_test, simulation=True)
 test_error = RMSE(pred, test_teacher)
 
 # visualize results
