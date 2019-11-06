@@ -156,9 +156,9 @@ class ReservoirModel(object):
             # get new regressors for output model
             x = self.update(_feature, reservoir=reservoir)
             if return_states:
-                states[i, :] = x
+                states[i, :] = x.flatten()
             if self.feed_input:
-                x = np.hstack((_feature.flatten(), x))
+                x = np.hstack((_feature.flatten(), x.flatten()))
 
             # predict next value
             pred = self.output_model.predict(x.reshape(1, -1))

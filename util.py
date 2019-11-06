@@ -222,10 +222,10 @@ class MultivariateFunction:
         self.input_dim = input_dim
         self.order = order
         self.size = self.num_params
-        if coeff:
-            if coeff.ndim == 3:
-                self._spectral_radius = np.prod([np.max(np.abs(np.linalg.eigvals(x[i, ...])))
-                                                 for i in range(self.size)])
+        # if coeff is not None:
+        #    if coeff.ndim == 3:
+        #        self._spectral_radius = np.prod([np.max(np.abs(np.linalg.eigvals(x[i, :, :])))
+        #                                         for i in range(self.size)])
 
     def __call__(self, x):
         """
@@ -268,11 +268,6 @@ class MultivariateFunction:
         coeff = [random_echo_matrix(size=shape, sparsity=sparsity, spectral_radius=spectral_radius)
                  for _ in range(num_params)]
         r.coeff = np.array(coeff)
-        try:
-            r._spectral_radius = np.prod([np.max(np.abs(np.linalg.eigvals(r.coeff[i, :, :])))
-                                          for i in range(r.size)])
-        except:
-            pass
         return r
 
     @property

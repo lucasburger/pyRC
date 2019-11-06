@@ -33,6 +33,7 @@ class BaseReservoir:
 
     def _set_state(self, x):
         self._state[:] = self.activation(x)
+        return self._state
 
     @property
     def state(self):
@@ -452,7 +453,7 @@ class SASReservoir(BaseReservoir):
 
     hyper_params = {'spectral_radius': (0.0, 1.0)}
 
-    def __init__(self, *args, input_dim=1, order_p=1, order_q=1, sparsity=0.0, spectral_radius=0.95, **kwargs):
+    def __init__(self, *args, input_dim=1, order_p=1, order_q=1, sparsity=0.0, spectral_radius=0.5, **kwargs):
         super().__init__(*args, activation=identity, **kwargs)
 
         assert 0 < spectral_radius < 1
@@ -463,8 +464,7 @@ class SASReservoir(BaseReservoir):
         self.q = MultivariatePolynomial.random(shape=(self.size,), input_dim=input_dim, order=order_q)
 
     def update(self, x):
-        x = x.reshape((-1, 1))
-        return np.apply_along_axis(super().update, axis=1, arr=x)
+        return np.apply_along_axis(super().update, axis=x.shape.index(self.input_size), arr=x)
 
     def _update_state(self, x):
         return super()._set_state(np.dot(self.p(x), self._state) + self.q(x))
@@ -489,155 +489,3 @@ class TrigoSASReservoir(SASReservoir):
 
         self.p = MultivariateTrigoPolynomial(self.p.input_dim, self.p.order, self.p.coeff)
         self.q = MultivariateTrigoPolynomial(self.q.input_dim, self.q.order, self.q.coeff)
-
-
-class ESNReservoirArray:
-
-    hyper_params = {}
-    _fixed_size = None
-
-    def __init__(self, *args, **kwargs):
-        self.reservoirs = list()
-        if kwargs:
-            self.add_reservoir(**kwargs)
-            self.fixed_size = self.reservoirs[-1].size
-
-    def add_reservoir(self, **kwargs):
-        new_res = LeakyESNReservoir(**kwargs)
-        self.reservoirs.append(new_res)
-        self.hyper_params = update_hyperparams(self.hyper_params, new_res.hyper_params)
-
-    def update(self, input_array):
-        return np.hstack([r.update(input_array) for r in self.reservoirs])
-
-    def copy(self):
-        return deepcopy(self)
-
-    def reset(self):
-        for r in self.reservoirs:
-            r._state = np.zeros(shape=(r.size,), dtype=np.float64)
-
-    @property
-    def size(self):
-        return sum([r.size for r in self.reservoirs])
-
-    @size.setter
-    def size(self, size):
-        s = int(size/len(self.reservoirs))
-        for r in self.reservoirs:
-            r.size = s
-
-    @property
-    def input_size(self):
-        return self._fixed_size
-
-    @property
-    def state(self):
-        return self._get_state()
-
-    def _get_state(self):
-        return np.hstack([r.state for r in self.reservoirs])
-
-    @property
-    def spectral_radius(self):
-        return [r.spectral_radius for r in self.reservoirs]
-
-    @spectral_radius.setter
-    def spectral_radius(self, other):
-        if isinstance(other, float):
-            for r in self.reservoirs:
-                r.spectral_radius = other
-        else:
-            for i, sr in enumerate(other):
-                self.reservoirs[i].spectral_radius = sr
-
-    @property
-    def bias(self):
-        return [r.bias for r in self.reservoirs]
-
-    @bias.setter
-    def bias(self, other):
-        if isinstance(other, float):
-            for r in self.reservoirs:
-                r.bias = other
-        else:
-            for i, b in enumerate(other):
-                self.reservoirs[i].bias = b
-
-    @property
-    def leak(self):
-        return [r.leak for r in self.reservoirs]
-
-    @leak.setter
-    def leak(self, other):
-        if isinstance(other, float):
-            for r in self.reservoirs:
-                r.leak = other
-        else:
-            for i, l in enumerate(other):
-                self.reservoirs[i].leak = l
-
-    @property
-    def fixed_size(self):
-        return self._fixed_size
-
-    @fixed_size.setter
-    def fixed_size(self, other):
-        if self._fixed_size is None:
-            self._fixed_size = other
-        else:
-            raise ValueError(f"fixed size for reservoir array already set {self._fixed_size}")
-
-
-class DeepESNReservoir(ESNReservoirArray):
-
-    def __init__(self):
-        super().__init__()
-        self.connections = list()
-        self.input_layers = list()
-        self.output_layers = list()
-
-    @make_kwargs_one_length
-    def add_layer(self, **kwargs):
-        for new_kwargs in [{k: v[i] for k, v in kwargs.items()} for i in range(max(map(len, kwargs.values())))]:
-            if new_kwargs.pop('input', False) or self.depth == 0:
-                self.input_layers.append(self.depth)
-            if new_kwargs.pop('output', True):
-                self.output_layers.append(self.depth)
-            if self.depth > 0:
-                s1 = self.reservoirs[-1].size
-                s2 = new_kwargs.get('size', 200)
-                self.connections.append(random_echo_matrix(size=(s1, s2), spectral_radius=0.95))
-            super().add_reservoir(**new_kwargs)
-
-    def update(self, input_array):
-        if input_array.ndim == 1 or input_array.shape[0] == 1:
-            for i, r in enumerate(self.reservoirs):
-                if i in self.input_layers:
-                    layer_input = input_array.copy()
-                else:
-                    layer_input = np.zeros_like(r.state)
-                if i > 0:
-                    layer_input += np.dot(self.connections[i-1], state)
-                state = r.update(layer_input)
-            return self.state
-        else:
-            return np.apply_along_axis(self.update, axis=1, arr=input_array)
-
-    def _get_state(self):
-        return np.hstack([self.reservoirs[i].state for i in self.output_layers])
-
-    @property
-    def depth(self):
-        return len(self.reservoirs)
-
-    @property
-    def input_size(self):
-        input_s = [self.reservoirs[i].size for i in self.input_layers]
-        if len(set(input_s)) > 1:
-            raise ValueError('Not the same input sizes in input connected Subreservoirs')
-        return list(set(input_s))[0]
-
-    @property
-    def echo(self):
-        return np.block([r.echo for r in self.reservoirs])
