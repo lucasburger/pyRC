@@ -6,10 +6,11 @@ This library was written in Python 3 and contains codes, that is not compatible 
 
 ## Installation
 
-Using git:
+From source (using git):
 
 ````
 git clone https://github.com/lucasburger/pyRC.git
+cd pyRC
 pip3 install -r requirements.txt
 ````
 
