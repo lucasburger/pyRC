@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy
 from datetime import datetime as dt
 
-from skopt import gbrt_minimize, gp_minimize, forest_minimize
+from skopt import dummy_minimize
 from skopt.utils import use_named_args
 from skopt.utils import Real
 
@@ -64,9 +64,8 @@ def optimizer(model, error_fun=None, dimensions=None, minimizer=None, exclude_hy
         for eh in set(exclude_hyper):
             hyper_dimensions.pop(eh)
 
-    default_minimizer = {'optimizer': gbrt_minimize,
-                         'n_calls': 20*len(hyper_dimensions),
-                         'acq_func': 'EI'}
+    default_minimizer = {'optimizer': dummy_minimize,
+                         'n_calls': 20*len(hyper_dimensions)}
 
     if minimizer is not None:
         default_minimizer.update(minimizer)
