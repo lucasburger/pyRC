@@ -65,7 +65,7 @@ def optimizer(model, error_fun=None, dimensions=None, minimizer=None, exclude_hy
             hyper_dimensions.pop(eh)
 
     default_minimizer = {'optimizer': gbrt_minimize,
-                         'n_calls': 50*len(hyper_dimensions),
+                         'n_calls': 20*len(hyper_dimensions),
                          'acq_func': 'EI'}
 
     if minimizer is not None:

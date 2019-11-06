@@ -26,24 +26,20 @@ class ReservoirModel(object):
         self.input_activation = kwargs.pop('input_activation', util.identity)
         self.input_inv_activation = kwargs.pop('input_inv_activation', util.identity)
 
-        self.output_activation = kwargs.pop('output_activation', util.identity)
-        self.output_inv_activation = kwargs.pop('output_inv_activation', util.identity)
-
         self.feed_input = kwargs.pop('feed_input', True)
 
         self.output_model = kwargs.pop(
             'output_model', MinEigenvalueRegression(min_eigenvalue=1e-6))
 
-        # try:
-        #     if self.output_model.get_params()['cv'] is None:
-        #         Warning("No crossvalidation set for output model.")
-        # except AttributeError:
-        #     pass
-
-        # try:
-        #     self.output_model.set_params(store_cv_values=True)
-        # except AttributeError:
-        #     pass
+        try:
+            if self.output_model.get_params()['cv'] is None:
+                Warning("No crossvalidation set for output model.")
+                try:
+                    self.output_model.set_params(store_cv_values=True)
+                except AttributeError:
+                    pass
+        except AttributeError:
+            pass
 
         self.reservoir = kwargs.get(
             'reservoir', self._reservoir_class(**kwargs))
@@ -191,6 +187,9 @@ class ReservoirModel(object):
             elif hasattr(self, name):
                 self.__setattr__(name, value)
 
+    def get_params(self):
+        return {k: getattr(self.reservoir, k) for k in self.reservoir.hyper_params.keys()}
+
     """
     The following are helper functions as well as attribute setters and getters
     """
@@ -240,19 +239,24 @@ class ReservoirModel(object):
 
     @property
     def teacher(self):
-        return self.output_scaler.unscale(self.output_inv_activation(self._teacher))
+        return self.output_scaler.unscale(self._teacher)
 
     @property
     def error(self):
         try:
+            cv_values = self.output_model.cv_values_
+            return np.mean(cv_values, axis=cv_values.shape[:-1])
+        except AttributeError:
+            pass
+
+        try:
             return self.output_model.error
         except AttributeError:
-            return util.RMSE(self._teacher, self._fitted)
-        # return util.RMSE(self._errors)
+            return util.RMSE(self._errors)
 
     @property
     def fitted(self):
-        return self.output_scaler.unscale(self.output_inv_activation(self._fitted))
+        return self.output_scaler.unscale(self._fitted)
 
     @burn_in_feature.setter
     def burn_in_feature(self, x):
@@ -270,7 +274,7 @@ class ReservoirModel(object):
     def teacher(self, x):
         if x.ndim == 1:
             x = x.reshape((-1, 1))
-        self._teacher = self.output_activation(self.output_scaler.scale(x))
+        self._teacher = self.output_scaler.scale(x)
         if not self._burned_in:
             self.W_fb = self.rmg(self.n_outputs, self.reservoir.input_size)
 

@@ -222,6 +222,10 @@ class MultivariateFunction:
         self.input_dim = input_dim
         self.order = order
         self.size = self.num_params
+        if coeff:
+            if coeff.ndim == 3:
+                self._spectral_radius = np.prod([np.max(np.abs(np.linalg.eigvals(x[i, ...])))
+                                                 for i in range(self.size)])
 
     def __call__(self, x):
         """
@@ -247,12 +251,15 @@ class MultivariateFunction:
         return "{}: order={}, input_dim={}".format(self.__class__.__name__, self.order, self.input_dim)
 
     @classmethod
-    def random(cls, shape, input_dim=1, order=1, sparsity=0.0, spectral_radius=None):
+    def random(cls, shape, input_dim=1, order=1, sparsity=None, spectral_radius=None):
         if spectral_radius:
             spectral_radius /= order
 
         if not isinstance(shape, tuple):
             shape = (shape,)*2
+
+        if sparsity is None:
+            sparsity = 1-float(10/np.min(shape)) if np.min(shape) > 50 else 0.5
 
         r = cls(input_dim, order)
 
@@ -261,6 +268,11 @@ class MultivariateFunction:
         coeff = [random_echo_matrix(size=shape, sparsity=sparsity, spectral_radius=spectral_radius)
                  for _ in range(num_params)]
         r.coeff = np.array(coeff)
+        try:
+            r._spectral_radius = np.prod([np.max(np.abs(np.linalg.eigvals(r.coeff[i, :, :])))
+                                          for i in range(r.size)])
+        except:
+            pass
         return r
 
     @property
@@ -269,6 +281,19 @@ class MultivariateFunction:
 
     def param_factors(self, base):
         raise NotImplementedError
+
+    @property
+    def spectral_radius(self):
+        self._spectral_radius
+
+    @spectral_radius.setter
+    def spectral_radius(self, other):
+        if isinstance(other, list) and len(other) == self.size:
+            for i, sr in enumerate(other):
+                self.coeff[i, ...] *= sr
+        elif other > 0:
+            self.coeff *= other**(1/self.size)
+        self._spectral_radius = other
 
 
 class MultivariatePolynomial(MultivariateFunction):
