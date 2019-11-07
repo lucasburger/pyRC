@@ -74,6 +74,10 @@ class ESNReservoir(BaseReservoir):
         self.__bias = self._bias * self._W_bias
 
     @property
+    def input_size(self):
+        return self.size
+
+    @property
     def echo(self):
         return self._echo
 

@@ -9,14 +9,6 @@ import util
 
 class EchoStateNetwork(ReservoirModel):
 
-    _reservoir_class = ESNReservoir
-
-    def __repr__(self):
-        return "({}: N={}, SR={})".format(self.__class__.__name__, self.size, self.spectral_radius)
-
-
-class LeakyEchoStateNetwork(ReservoirModel):
-
     _reservoir_class = LeakyESNReservoir
 
     def __repr__(self):
