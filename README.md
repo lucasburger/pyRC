@@ -30,7 +30,8 @@ pip3 install -r requirements.txt
 
 ## Output Models
 
-Output models can basically be chosen from any [scikit-learn](https://scikit-learn.org/stable/) model having a fit and predict method. Alternatively, they can be specified separately and, for convenience, can derive from model.output_models.BaseOutputModel:
+Output models can basically be chosen from any [scikit-learn](https://scikit-learn.org/stable/) model having a fit and predict method. In case, the model performs cross validation, make sure to store the cv-scores. 
+Alternatively, they can be specified separately and, for convenience, can derive from model.output_models.BaseOutputModel:
 
  ```python
 from abc import ABCMeta, abstractmethod, abstractproperty
