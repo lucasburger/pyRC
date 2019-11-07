@@ -22,7 +22,7 @@ pip3 install -r requirements.txt
 - Parallel ESN (work in progress)
 - (Arbitrary) Topological ESN (work in progress)
 
-## State Affine Systems (Work in progress)
+## State Affine Systems (Work in progress, still buggy)
 
 [Grigoryeva and Ortega (2018)](https://arxiv.org/pdf/1712.00754.pdf)
 - Polynomial SAS
