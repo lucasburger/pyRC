@@ -1,12 +1,12 @@
 # pyRC
 
-# Preliminaries
+## Preliminaries
 
 This library was written in Python 3 and contains codes, that is not compatible with Python 2.7. However, changing a few lines and import statements will make it work with both versions.
 
 Documentation is "not very good" to "almost not existent". This will come in later stages.
 
-# Installation
+## Installation
 
 From source (using git):
 
@@ -16,21 +16,21 @@ cd pyRC
 pip3 install -r requirements.txt
 ````
 
-# The Library
+## The Library
 
-## Echo State Networks
+### Echo State Networks
 - (Leaky-Integrator) ESN
 - Deep ESN [Gallicchio and Micheli (2017)](https://arxiv.org/abs/1712.04323)
 - Parallel ESN (work in progress)
 - (Arbitrary) Topological ESN (work in progress)
 
-## State Affine Systems (Work in progress, still buggy)
+### State Affine Systems (Work in progress, still buggy)
 
 [Grigoryeva and Ortega (2018)](https://arxiv.org/pdf/1712.00754.pdf)
 - Polynomial SAS
 - Trigonometric SAS
 
-## Output Models
+### Output Models
 
 Output models can basically be chosen from any [scikit-learn](https://scikit-learn.org/stable/) model having a fit and predict method. In case, the model performs cross validation, make sure to store the cv-scores. 
 Alternatively, they can be specified separately and, for convenience, can derive from model.output_models.BaseOutputModel:
@@ -62,13 +62,13 @@ class BaseOutputModel:
 
 ```
 
-## Hyperparameter Optimization
+### Hyperparameter Optimization
 
 Although, Reservoir Computers are lightweight in terms of training, the optimization of hyperparameters - as with any machine learning algorithm - bares some challenge.
 Automatic optimization is performed using the library [scikit-optimize](https://scikit-optimize.github.io) which is unfortunately not maintained anymore.
 You can let the optimizer choose the hyperparameters (i.e. spectral radius, bias or leak) by setting the ```hyper_tuning=True```when calling the train method.
 
-## Examples
+### Examples
 
 This is a very basic example of training a leaky-integrator ESN on the [Mackey-Glass chaotic timeseries](http://www.scholarpedia.org/article/Mackey-Glass_equation).
 
