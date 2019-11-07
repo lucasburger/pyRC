@@ -1,17 +1,5 @@
 # pyRC
 
-Reservoir Systems (RC) are systems of the form
-x_t = F(x_{t-1}, z_t)
-y_t = h(x_t)
-
-being composed of a reservoir map F: D_N \times D_d \to D_N and a readout h: D_N \to R^m
-
-For example: 
-h may be a linear readout and F
-
-x_t = \sigma(Ax_{t-a} + Cz_t + \zeta)
-y_t = W^Tx_t + a
-
 # Preliminaries
 
 This library was written in Python 3 and contains codes, that is not compatible with Python 2.7. However, changing a few lines and import statements will make it work with both versions.
