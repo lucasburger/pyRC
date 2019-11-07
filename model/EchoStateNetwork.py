@@ -2,7 +2,7 @@
 from copy import copy
 import numpy as np
 from model.BaseModel import ReservoirModel
-from model.reservoirs import LeakyESNReservoir, DeepESNReservoir, ESNReservoirArray
+from model.reservoirs import ESNReservoir, LeakyESNReservoir, DeepESNReservoir, ESNReservoirArray
 from model.scaler import tanh, identity
 import util
 
@@ -10,6 +10,14 @@ import util
 class EchoStateNetwork(ReservoirModel):
 
     _reservoir_class = ESNReservoir
+
+    def __repr__(self):
+        return "({}: N={}, SR={})".format(self.__class__.__name__, self.size, self.spectral_radius)
+
+
+class LeakyEchoStateNetwork(ReservoirModel):
+
+    _reservoir_class = LeakyESNReservoir
 
     def __repr__(self):
         return "({}: N={}, SR={})".format(self.__class__.__name__, self.size, self.spectral_radius)
