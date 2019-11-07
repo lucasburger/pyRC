@@ -54,7 +54,7 @@ class BaseReservoir:
 
 class ESNReservoir(BaseReservoir):
 
-    hyper_params = {'spectral_radius': (0.0, 3.0),
+    hyper_params = {'spectral_radius': (0.0, 1.0),
                     'bias': (-1.0, 1.0)}
 
     def __init__(self, *args, bias=0.0, spectral_radius=0.5, sparsity=None, allow_sparse_echo=True, **kwargs):
