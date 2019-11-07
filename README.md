@@ -4,6 +4,8 @@
 
 This library was written in Python 3 and contains codes, that is not compatible with Python 2.7. However, changing a few lines and import statements will make it work with both versions.
 
+Documentation is "not very good" to "almost not existent". This will come in later stages.
+
 # Installation
 
 From source (using git):
