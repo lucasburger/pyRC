@@ -6,12 +6,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
+np.random.seed(42)
+
 l = 2000  # length of mackey glass timeseries
 mg = MackeyGlass(l, drop_out=0.1).reshape((-1, 1))
 mg -= np.mean(mg)  # demean
 
 # split into train and test parts
-n_pred = 500
+n_pred = 1000
 train_feature = mg[:-n_pred-1]
 train_teacher = mg[1:-n_pred]
 test_teacher = mg[-n_pred:]
@@ -20,7 +22,7 @@ test_teacher = mg[-n_pred:]
 e = deepESN()
 # adds three layers according to the spetral radii
 e.add_layer(spectral_radius=[0.9, 0.95, 0.99])
-r, result_dict = e.train(feature=train_feature, teacher=train_teacher, hyper_tuning=True,
+r, result_dict = e.train(feature=train_feature, teacher=train_teacher, hyper_tuning=False,
                          exclude_hyper=['leak'])  # doesn't optimize the leak
 
 # forecast

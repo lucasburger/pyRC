@@ -1,7 +1,7 @@
 
 from copy import copy
 import numpy as np
-from model.output_models import MinEigenvalueRegression
+from model.output_models import GaussianElimination
 from model.reservoirs import BaseReservoir
 from model.scaler import tanh, identity
 import util
@@ -12,7 +12,7 @@ class ReservoirModel(object):
 
     """
     This class is base model for any Reservoir computing model. Main difference will be the attribute _reservoir_class,
-    which creates an EchoStateNetwork if set to ESNReservoir or a StateAffineSytem if set to SARReservoir
+    which creates an EchoStateNetwork if set to ESNReservoir or a StateAffineSytem if set to SASReservoir
     """
     _reservoir_class = BaseReservoir
 
@@ -26,10 +26,10 @@ class ReservoirModel(object):
         self.input_activation = kwargs.pop('input_activation', util.identity)
         self.input_inv_activation = kwargs.pop('input_inv_activation', util.identity)
 
-        self.feed_input = kwargs.pop('feed_input', True)
+        self.regress_input = kwargs.pop('regress_input', True)
 
         self.output_model = kwargs.pop(
-            'output_model', MinEigenvalueRegression(min_eigenvalue=1e-6))
+            'output_model', GaussianElimination())
 
         try:
             if self.output_model.get_params()['cv'] is None:
@@ -41,10 +41,11 @@ class ReservoirModel(object):
         except AttributeError:
             pass
 
+        self.W_in = kwargs.pop('W_in', None)
+
         self.reservoir = kwargs.get(
             'reservoir', self._reservoir_class(**kwargs))
 
-        self.W_in = None
         self._burned_in = False
         self._burn_in_feature = None
         self._feature = None
@@ -68,7 +69,7 @@ class ReservoirModel(object):
                 input_array = input_array.reshape((-1, 1))
 
         # if input_array.shape[0] == 1:
-        return self.reservoir.update(np.dot(input_array, self.W_in))
+        return reservoir.update(np.dot(input_array, self.W_in))
         # else:
         #    return np.apply_along_axis(self.update, axis=1, arr=input_array, reservoir=reservoir)
 
@@ -99,7 +100,8 @@ class ReservoirModel(object):
         self.feature = feature
         self.teacher = teacher
 
-        self.W_in = util.matrix_uniform(self._feature.shape[-1], self.reservoir.input_size)
+        if self.W_in is None:
+            self.W_in = util.matrix_uniform(self._feature.shape[-1], self.reservoir.input_size)
 
         r, result_dict = None, {}
         if hyper_tuning:
@@ -118,11 +120,11 @@ class ReservoirModel(object):
 
         self.update(self._burn_in_feature)
         x = self.update(self._feature)
-        if self.feed_input:
+        if self.regress_input:
             x = np.hstack((self._feature, x))
 
         # fit output model and calculate errors
-        y = self._teacher.flatten()
+        y = self._teacher
         self.output_model.fit(x, y)
         self._fitted = self.output_model.predict(x)
         self._errors = (self._fitted - self._teacher).flatten()
@@ -157,7 +159,8 @@ class ReservoirModel(object):
             x = self.update(_feature, reservoir=reservoir)
             if return_states:
                 states[i, :] = x.flatten()
-            if self.feed_input:
+
+            if self.regress_input:
                 x = np.hstack((_feature.flatten(), x.flatten()))
 
             # predict next value
@@ -275,8 +278,6 @@ class ReservoirModel(object):
         if x.ndim == 1:
             x = x.reshape((-1, 1))
         self._teacher = self.output_scaler.scale(x)
-        if not self._burned_in:
-            self.W_fb = self.rmg(self.n_outputs, self.reservoir.input_size)
 
     @sparsity.setter
     def sparsity(self, x):

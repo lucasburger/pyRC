@@ -84,9 +84,16 @@ def ts_split(n, test_set_size=1, test_sets=1):
         i += 1
 
 
+def MSE(x, y):
+    return np.mean((x.flatten() - y.flatten())**2)
+
+
 def RMSE(x, y=None):
-    y = y if y is not None else np.zeros_like(x)
-    return np.sqrt(np.mean(np.square(x.flatten()-y.flatten())))
+    return np.sqrt(MSE(x.flatten(), y.flatten()))
+
+
+def NRMSE(x, y):
+    return RMSE(x, y)/np.var(y)
 
 
 def identity(x):
@@ -97,11 +104,16 @@ def MackeyGlass(l, beta=0.2, gamma=0.1, tau=17, n=10, drop_out=0.1, initial_cond
     if random_seed or initial_condition is None:
         np.random.seed(random_seed)
         initial_condition = np.random.uniform(0.5, 1.2, tau)
-    elif not isinstance(initial_condition, list):
-        initial_condition = np.array(initial_condition)
+    elif not isinstance(initial_condition, np.ndarray):
+        initial_condition = np.asarray(initial_condition).flatten()
+
+    if initial_condition.shape[0] != tau:
+        initial_condition = np.hstack((initial_condition, np.zeros((tau-initial_condition.shape[0],))))
 
     assert len(initial_condition) >= tau
     assert l > tau
+
+    l = int(l/(1-drop_out))
 
     mg = MackeyGlassNumba(l, initial_condition, beta=beta, gamma=gamma, tau=tau, n=n)
     return mg[int(l*drop_out):]
@@ -120,7 +132,7 @@ def MackeyGlassNumba(l: int, initial_condition: np.ndarray, beta: float = 0.2, g
 
 
 # this just compiles MackeyGlassNumba to be used later on
-x = MackeyGlass(100)
+#x = MackeyGlass(100)
 
 
 def expand_echo_matrix(echo=None, new_shape=None, new_matrix=None):
@@ -222,10 +234,6 @@ class MultivariateFunction:
         self.input_dim = input_dim
         self.order = order
         self.size = self.num_params
-        # if coeff is not None:
-        #    if coeff.ndim == 3:
-        #        self._spectral_radius = np.prod([np.max(np.abs(np.linalg.eigvals(x[i, :, :])))
-        #                                         for i in range(self.size)])
 
     def __call__(self, x):
         """
@@ -236,6 +244,9 @@ class MultivariateFunction:
                 a_{2,0}*x1^2 + a_{2,1}*x1^2*x2
         with a_{i,j} in R^n for all i,j <= 2
         """
+        if x.ndim == 3:
+            raise ValueError
+
         if x.ndim == 1:
             if x.shape[0] == self.input_dim:
                 return self._eval(x)
@@ -252,18 +263,19 @@ class MultivariateFunction:
 
     @classmethod
     def random(cls, shape, input_dim=1, order=1, sparsity=None, spectral_radius=None):
-        if spectral_radius:
-            spectral_radius /= order
 
         if not isinstance(shape, tuple):
             shape = (shape,)*2
 
         if sparsity is None:
-            sparsity = 1-float(10/np.min(shape)) if np.min(shape) > 50 else 0.5
+            sparsity = 1-float(10/np.min(shape))
 
         r = cls(input_dim, order)
 
         num_params = r.num_params
+
+        if spectral_radius:
+            spectral_radius /= num_params
 
         coeff = [random_echo_matrix(size=shape, sparsity=sparsity, spectral_radius=spectral_radius)
                  for _ in range(num_params)]

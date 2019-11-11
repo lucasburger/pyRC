@@ -106,8 +106,8 @@ class MinEigenvalueRegression(BaseOutputModel):
             self.regularize_lambda = np.real(self.regularize_lambda)
 
         self.beta = np.linalg.pinv(xx + self.regularize_lambda * self.size * np.eye(self.size)) @ x.T @ y
-        #self.fitted = np.dot(x, self.beta)
-        #self.error = util.RMSE(self.fitted, y)
+        # self.fitted = np.dot(x, self.beta)
+        # self.error = util.RMSE(self.fitted, y)
 
         return
 
@@ -131,3 +131,78 @@ class MinEigenvalueRegression(BaseOutputModel):
     @size.setter
     def size(self, other):
         self._size = other
+
+
+class GaussianElimination:
+
+    def __init__(self, add_intercept: bool = True, ridgelambda: float = 0.0):
+        self.add_intercept = True
+        self.beta = None
+        self.ridgelambda = ridgelambda
+        self.fitted = None
+        self._error = None
+
+    def fit(self, x: np.ndarray, y: np.ndarray):
+
+        if y.ndim == 1:
+            y = y.reshape((-1, 1))
+
+        if self.add_intercept:
+            x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
+
+        if self.ridgelambda > 0.0:
+            self.beta = np.linalg.pinv(np.dot(x.T, x) + self.ridgelambda * np.eye(x.shape[0])) @ x.T @ y
+        else:
+            self.beta = np.dot(np.linalg.pinv(x), y)
+
+        self.fitted = np.dot(x, self.beta)
+        self._error = util.NRMSE(y, self.fitted)
+        return
+
+    def predict(self, x: np.ndarray):
+        if self.add_intercept:
+            x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
+        return np.dot(x, self.beta)
+
+    @property
+    def error(self):
+        return self._error
+
+
+spec = [
+    ('add_intercept', numba.bool_),
+    # ('ridgelambda', numba.float32),               # a simple scalar field
+    # ('_error', numba.float32),               # a simple scalar field
+    ('beta', numba.float64[:, :]),
+    # ('fitted', numba.float64[:])          # an array field
+]
+
+
+@numba.jitclass(spec)
+class NumbaGaussianElimination:
+
+    def __init__(self, add_intercept: bool = True):
+        self.add_intercept = True
+        self.beta = np.zeros(shape=(1, 1), dtype=np.float64)
+        # self.fitted = np.zeros(shape=(0,))
+        # self._error = 0.0
+
+    def fit(self, x: np.ndarray, y: np.ndarray):
+
+        if self.add_intercept:
+            x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
+
+        self.beta = np.dot(np.linalg.pinv(x), y)
+
+        # self.fitted = np.dot(x, self.beta)
+        # self._error = util.RMSE(y, self.fitted)
+        return
+
+    def predict(self, x: np.ndarray):
+        if self.add_intercept:
+            x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
+        return np.dot(x, self.beta)
+
+    # @property
+    # def error(self):
+    #     return self._error

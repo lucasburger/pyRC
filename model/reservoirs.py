@@ -5,6 +5,7 @@ from util import MultivariatePolynomial, MultivariateTrigoPolynomial, identity
 from numpy.lib.stride_tricks import as_strided
 from scipy import sparse
 from copy import deepcopy
+import numba
 
 
 class BaseReservoir:
@@ -33,7 +34,7 @@ class BaseReservoir:
 
     def _set_state(self, x):
         self._state[:] = self.activation(x)
-        return self._state
+        return self._state.copy()
 
     @property
     def state(self):
@@ -57,7 +58,7 @@ class ESNReservoir(BaseReservoir):
     hyper_params = {'spectral_radius': (0.0, 1.0),
                     'bias': (-1.0, 1.0)}
 
-    def __init__(self, *args, bias=0.0, spectral_radius=0.5, sparsity=None, allow_sparse_echo=True, **kwargs):
+    def __init__(self, *args, bias=0.1, spectral_radius=0.5, sparsity=None, echo=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._bias = bias
         assert spectral_radius > 0
@@ -67,11 +68,11 @@ class ESNReservoir(BaseReservoir):
 
         self._spectral_radius = spectral_radius
         self._sparsity = sparsity
-        self._echo = random_echo_matrix(size=(self.size, self.size), sparsity=sparsity, spectral_radius=spectral_radius)
-        if self.size > 500 and allow_sparse_echo:
-            self._echo = sparse.csr_matrix(self._echo)
-        self._W_bias = matrix_uniform(self.size)
-        self.__bias = self._bias * self._W_bias
+        if echo is None:
+            echo = random_echo_matrix(size=(self.size, self.size), sparsity=sparsity, spectral_radius=spectral_radius)
+        self._echo = sparse.csr_matrix(echo)
+        #self._W_bias = matrix_uniform(self.size)
+        self._W_bias = np.ones((self.size,))
 
     @property
     def input_size(self):
@@ -128,8 +129,6 @@ class LeakyESNReservoir(ESNReservoir):
     def __init__(self, *args, leak=1.0, size=200, **kwargs):
         super().__init__(*args, size=size, **kwargs)
         self._leak = leak
-        if sparse.issparse(self._echo):
-            self._set_state = self._sparse_set_state
 
     @property
     def leak(self):
@@ -145,14 +144,12 @@ class LeakyESNReservoir(ESNReservoir):
     def _set_leak(self, x):
         self._leak = min([abs(x), 1.0])
 
-    def _set_state(self, x):
-        new_state = np.dot(self._echo, self._state) + x + (self._bias + self._W_bias)
-        self._state[:] = self.leak * self.activation(new_state) + (1 - self.leak) * self._state
-        return self._state
-
-    def _sparse_set_state(self, x):
+    def _set_state(self, x: np.array):
+        """
+        This is using sparse matrices therefore it uses "simple" multiplication * instead of np.dot
+        """
         new_state = self._echo * self._state + x + (self.bias * self._W_bias)
-        self._state[:] = self.leak * self.activation(new_state) + (1 - self.leak) * self._state
+        self._state[:] = self.leak * self.activation(new_state) + (1.0 - self.leak) * self._state
         return self._state
 
     @property
@@ -457,8 +454,9 @@ class SASReservoir(BaseReservoir):
 
     hyper_params = {'spectral_radius': (0.0, 1.0)}
 
-    def __init__(self, *args, input_dim=1, order_p=1, order_q=1, sparsity=0.0, spectral_radius=0.5, **kwargs):
+    def __init__(self, *args, input_dim=1, order_p=2, order_q=2, sparsity=0.0, spectral_radius=0.95, **kwargs):
         super().__init__(*args, activation=identity, **kwargs)
+        self.input_dim = input_dim
 
         assert 0 < spectral_radius < 1
         if sparsity is None:
@@ -470,12 +468,12 @@ class SASReservoir(BaseReservoir):
     def update(self, x):
         return np.apply_along_axis(super().update, axis=x.shape.index(self.input_size), arr=x)
 
-    def _update_state(self, x):
+    def _set_state(self, x):
         return super()._set_state(np.dot(self.p(x), self._state) + self.q(x))
 
     @property
     def input_size(self):
-        return self.p.input_dim
+        return self.input_dim
 
     @property
     def spectral_radius(self):
@@ -488,7 +486,7 @@ class SASReservoir(BaseReservoir):
 
 class TrigoSASReservoir(SASReservoir):
 
-    def __init__(self, *args, input_dim=1, p=1, q=1, **kwargs):
+    def __init__(self, *args, input_dim=2, p=2, q=2, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.p = MultivariateTrigoPolynomial(self.p.input_dim, self.p.order, self.p.coeff)
