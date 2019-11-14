@@ -75,7 +75,8 @@ class ReservoirModel(object):
 
     def train(self, feature, burn_in_feature=None, burn_in_split=0.1, teacher=None,
               error_fun=util.RMSE, hyper_tuning=False,
-              dimensions=None, minimizer=None, exclude_hyper=None):
+              dimensions=None, exclude_hyper=None,
+              optimizer=skoptOptimizer, optimizer_kwargs=None):
         """
         Training of the network
         :param feature: features for the training
@@ -86,12 +87,20 @@ class ReservoirModel(object):
         """
 
         if burn_in_feature is None:
+            if burn_in_split < 1.0
             burn_in_ind = int(burn_in_split * feature.shape[0])
+            else:
+                burn_in_ind = int(burn_in_split)
+
+            # adjust feature accordingly
             burn_in_feature = feature[:burn_in_ind, :]
             feature = feature[burn_in_ind:, :]
+
+            # and teacher if it has been provided
             if teacher is not None:
                 teacher = teacher[burn_in_ind:, :]
 
+        # if no teacher has been provided, shift the feature by one
         if teacher is None:
             teacher = feature[1:, :]
             feature = feature[:-1, :]
@@ -100,9 +109,11 @@ class ReservoirModel(object):
         self.feature = feature
         self.teacher = teacher
 
+        # if W_in has not been provided in the __init__, set it according to the sizes
         if self.W_in is None:
             self.W_in = util.matrix_uniform(self._feature.shape[-1], self.reservoir.input_size)
 
+        # hyper tuning if set to True
         r, result_dict = None, {}
         if hyper_tuning:
             r, result_dict = optimizer.optimizer(self, error_fun=error_fun, dimensions=dimensions,
@@ -124,8 +135,7 @@ class ReservoirModel(object):
             x = np.hstack((self._feature, x))
 
         # fit output model and calculate errors
-        y = self._teacher
-        self.output_model.fit(x, y)
+        self.output_model.fit(x, self._teacher)
         self._fitted = self.output_model.predict(x)
         self._errors = (self._fitted - self._teacher).flatten()
 
