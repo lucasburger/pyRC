@@ -455,6 +455,8 @@ class SASReservoir(BaseReservoir):
     hyper_params = {'spectral_radius': (0.0, 1.0)}
 
     def __init__(self, *args, input_dim=1, order_p=2, order_q=2, sparsity=0.0, spectral_radius=0.95, **kwargs):
+        if kwargs.get('size', 0) == 0:
+            kwargs['size'] = 200
         super().__init__(*args, activation=identity, **kwargs)
         self.input_dim = input_dim
 

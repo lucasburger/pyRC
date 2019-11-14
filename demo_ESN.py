@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-from model.EchoStateNetwork import EchoStateNetwork as ESN
-from util import MackeyGlass, RMSE, NRMSE
+from models import EchoStateNetwork as ESN
+from util import MackeyGlass, RMSE, NRMSE, MSE
 import numpy as np
 import matplotlib.pyplot as plt
 import json
@@ -17,12 +17,12 @@ train_feature = mg[:-n_pred]
 test_teacher = mg[-n_pred:]
 
 # set up ESN and train
-e = ESN(size=1000, spectral_radius=0.95)
-r, result_dict = e.train(feature=train_feature, hyper_tuning=True, exclude_hyper=['leak'], error_fun=NRMSE)
+e = ESN(size=1000, bias=0.2, spectral_radius=0.95)
+r, result_dict = e.train(feature=train_feature, hyper_tuning=False, exclude_hyper=['leak'], error_fun=NRMSE)
 
 # forecast
 pred = e.predict(n_predictions=n_pred, simulation=True)
-test_error = NRMSE(pred, test_teacher)
+test_error = MSE(pred, test_teacher)
 
 # visualize results
 fig = plt.figure(1)

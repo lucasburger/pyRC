@@ -1,9 +1,9 @@
 
 from copy import copy
 import numpy as np
-from model.output_models import GaussianElimination
-from model.reservoirs import BaseReservoir
-from model.scaler import tanh, identity
+from .output_models import GaussianElimination
+from .reservoirs import BaseReservoir
+from .scaler import tanh, identity
 import util
 import optimizer
 
@@ -74,9 +74,9 @@ class ReservoirModel(object):
         #    return np.apply_along_axis(self.update, axis=1, arr=input_array, reservoir=reservoir)
 
     def train(self, feature, burn_in_feature=None, burn_in_split=0.1, teacher=None,
-              error_fun=util.RMSE, hyper_tuning=False,
-              dimensions=None, exclude_hyper=None,
-              optimizer=skoptOptimizer, optimizer_kwargs=None):
+              error_fun=util.RMSE,
+              hyper_tuning=False, dimensions=None, exclude_hyper=None,
+              minimizer=None):
         """
         Training of the network
         :param feature: features for the training
@@ -87,14 +87,16 @@ class ReservoirModel(object):
         """
 
         if burn_in_feature is None:
-            if burn_in_split < 1.0
-            burn_in_ind = int(burn_in_split * feature.shape[0])
+            if burn_in_split < 1.0:
+                burn_in_ind = int(burn_in_split * feature.shape[0])
             else:
                 burn_in_ind = int(burn_in_split)
 
             # adjust feature accordingly
             burn_in_feature = feature[:burn_in_ind, :]
             feature = feature[burn_in_ind:, :]
+
+            print(burn_in_feature.shape)
 
             # and teacher if it has been provided
             if teacher is not None:

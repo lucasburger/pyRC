@@ -164,10 +164,6 @@ class GaussianElimination:
             x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
         return np.dot(x, self.beta)
 
-    @property
-    def error(self):
-        return self._error
-
 
 spec = [
     ('add_intercept', numba.bool_),
@@ -184,8 +180,6 @@ class NumbaGaussianElimination:
     def __init__(self, add_intercept: bool = True):
         self.add_intercept = True
         self.beta = np.zeros(shape=(1, 1), dtype=np.float64)
-        # self.fitted = np.zeros(shape=(0,))
-        # self._error = 0.0
 
     def fit(self, x: np.ndarray, y: np.ndarray):
 
@@ -194,15 +188,9 @@ class NumbaGaussianElimination:
 
         self.beta = np.dot(np.linalg.pinv(x), y)
 
-        # self.fitted = np.dot(x, self.beta)
-        # self._error = util.RMSE(y, self.fitted)
         return
 
     def predict(self, x: np.ndarray):
         if self.add_intercept:
             x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
         return np.dot(x, self.beta)
-
-    # @property
-    # def error(self):
-    #     return self._error

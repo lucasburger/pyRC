@@ -89,6 +89,8 @@ def MSE(x, y):
 
 
 def RMSE(x, y=None):
+    if y is None:
+        y = np.zeros_like(x)
     return np.sqrt(MSE(x.flatten(), y.flatten()))
 
 

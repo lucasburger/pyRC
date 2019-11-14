@@ -1,5 +1,5 @@
-from model.BaseModel import ReservoirModel
-from model.reservoirs import SASReservoir, TrigoSASReservoir
+from .BaseModel import ReservoirModel
+from .reservoirs import SASReservoir, TrigoSASReservoir
 
 
 class StateAffineSystem(ReservoirModel):
