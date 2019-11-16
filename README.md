@@ -70,7 +70,7 @@ You can let the optimizer choose the hyperparameters (i.e. spectral radius, bias
 
 ### Examples
 
-This is a very basic example of training a leaky-integrator ESN on the [Mackey-Glass chaotic timeseries](http://www.scholarpedia.org/article/Mackey-Glass_equation).
+This is a very basic example of training a ESN on the [Mackey-Glass chaotic timeseries](http://www.scholarpedia.org/article/Mackey-Glass_equation).
 
 ```python
 from model.EchoStateNetwork import EchoStateNetwork as ESN
@@ -89,8 +89,8 @@ train_teacher = mg[1:-n_pred]
 test_teacher = mg[-n_pred:]
 
 # set up ESN and train
-e = ESN()
-r, result_dict = e.train(feature=train_feature, teacher=train_teacher, hyper_tuning=True)
+e = ESN(leak=1.0)
+r, result_dict = e.train(feature=train_feature, teacher=train_teacher, hyper_tuning=True, exclude_hyper=['leak'])
 
 # forecast
 pred = e.predict(n_predictions=n_pred, simulation=True)

@@ -24,14 +24,15 @@ def rebuild_dimensions(dims):
     # result dict
     d = {}
 
-    # create a list of keys without numbers
+    # create a dictionary where the key is the parameter, but without the
+    # number and the value is a list of parameters with numbers
     keys = {}
     for dim in dims.keys():
         kwn = ''.join([i for i in dim if not i.isdigit()])
         keys[kwn] = keys.get(kwn, []) + [dim]
 
     for key, list_of_old_keys in keys.items():
-        v = [dims[k] for k in list_of_old_keys]
+        v = [round(dims[k], 4) for k in list_of_old_keys]
         d.update({key: v if len(v) > 1 else v[0]})
 
     return d

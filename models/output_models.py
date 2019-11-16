@@ -151,7 +151,7 @@ class GaussianElimination:
             x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
 
         if self.ridgelambda > 0.0:
-            self.beta = np.linalg.pinv(np.dot(x.T, x) + self.ridgelambda * np.eye(x.shape[0])) @ x.T @ y
+            self.beta = np.linalg.pinv(np.dot(x.T, x) + self.ridgelambda * np.eye(x.shape[1])) @ x.T @ y
         else:
             self.beta = np.dot(np.linalg.pinv(x), y)
 

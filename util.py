@@ -4,6 +4,7 @@ from scipy import sparse
 import numba
 from math import factorial as fac
 from itertools import product
+from scipy import sparse
 
 
 def update_hyperparams(old, new):
@@ -134,7 +135,7 @@ def MackeyGlassNumba(l: int, initial_condition: np.ndarray, beta: float = 0.2, g
 
 
 # this just compiles MackeyGlassNumba to be used later on
-#x = MackeyGlass(100)
+x = MackeyGlass(100)
 
 
 def expand_echo_matrix(echo=None, new_shape=None, new_matrix=None):
@@ -145,9 +146,13 @@ def expand_echo_matrix(echo=None, new_shape=None, new_matrix=None):
         new_shape = new_matrix.shape
 
     new_echo = np.zeros(shape=(echo.shape[0]+new_shape[0], echo.shape[1]+new_shape[1]), dtype=np.float)
-    new_echo[:echo.shape[0], :echo.shape[1]] = echo
+    new_echo[:echo.shape[0], :echo.shape[1]] = echo.todense()
     if new_matrix is not None:
         new_echo[echo.shape[0]:new_echo.shape[0], echo.shape[1]:new_echo.shape[1]] = new_matrix
+
+    if sparse.issparse(echo):
+        new_echo = sparse.csr_matrix(new_echo)
+
     return new_echo
 
 
@@ -158,31 +163,40 @@ def self_activation(radius=1):
 
 
 def make_kwargs_one_length(func):
-    def f(*args, **kwargs):
-        lengths = []
+    def kwargs_one_length(*args, **kwargs):
+
         if len(kwargs) == 0:
             return func(*args, **kwargs)
 
+        lengths = []
+
         for k, v in kwargs.items():
             if isinstance(v, list):
-                lengths.append(len(v))
-            else:
-                kwargs[k] = [v]
-                lengths.append(1)
+                if len(v) > 1:
+                    lengths.append(len(v))
 
         if len(set(lengths)) > 1:
-            raise ValueError
+            raise ValueError(f"Inconsistend inputs to {func.__name__}: equal list lengths or length 1.")
 
-        ma = max(lengths)
+        if len(lengths) > 0:
+            ma = max(lengths)
+        else:
+            ma = 1
+
         for k, v in kwargs.items():
             if not isinstance(v, list):
-                kwargs[k] = [v for _ in range(ma)]
+                kwargs[k] = [v] * ma
 
-        return func(*args, **kwargs)
-    return f
+        result = []
+        for i in range(ma):
+            new_kwargs = {k: v[i] for k, v in kwargs.items()}
+            result.append(func(*args, **new_kwargs))
+        return result
+
+    return kwargs_one_length
 
 
-def getWeights_FFD(d, thres):
+def getWeights_FFD(d: float, thres: float):
     w, k = [1.], 1
     while True:
         w_ = -w[-1]/k*(d-k+1)
@@ -264,7 +278,7 @@ class MultivariateFunction:
         return "{}: order={}, input_dim={}".format(self.__class__.__name__, self.order, self.input_dim)
 
     @classmethod
-    def random(cls, shape, input_dim=1, order=1, sparsity=None, spectral_radius=None):
+    def random(cls, shape, input_dim=1, order=1, sparsity=None, spectral_radius=None, matrix_type='full'):
 
         if not isinstance(shape, tuple):
             shape = (shape,)*2
@@ -276,11 +290,18 @@ class MultivariateFunction:
 
         num_params = r.num_params
 
-        if spectral_radius:
-            spectral_radius /= num_params
+        # if spectral_radius:
+        #     spectral_radius /= num_params
 
-        coeff = [random_echo_matrix(size=shape, sparsity=sparsity, spectral_radius=spectral_radius)
-                 for _ in range(num_params)]
+        if matrix_type == 'full':
+            coeff = [random_echo_matrix(size=shape, sparsity=sparsity, spectral_radius=spectral_radius)
+                     for _ in range(num_params)]
+        elif matrix_type == 'diag':
+            coeff = []
+            for _ in range(num_params):
+                m = np.diag(np.random.random((shape[0],)))
+                m /= spectral_radius/np.max(np.abs(np.linalg.eigvals(m)))
+                coeff.append(m)
         r.coeff = np.array(coeff)
         return r
 
@@ -323,7 +344,7 @@ class MultivariateTrigoPolynomial(MultivariateFunction):
     def param_factors(self, base):
         r"""
         Combinations of factors with sum of exponents less than the order of the polynomial
-        e.g.: sum_{i_k \in {0,...,order} sum(i_k) < order} i_k * x_k
+        e.g.: np.cos(sum_{i_k \in {0,...,order} sum(i_k) < order} i_k * x_k)
         """
         factors = list(product(range(self.order+1), repeat=base.shape[0]))
         factors = list(filter(lambda x: sum(x) <= self.order, factors))

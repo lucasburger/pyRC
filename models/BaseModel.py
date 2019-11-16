@@ -36,7 +36,7 @@ class ReservoirModel(object):
                 Warning("No crossvalidation set for output model.")
                 try:
                     self.output_model.set_params(store_cv_values=True)
-                except AttributeError:
+                except KeyError:
                     pass
         except AttributeError:
             pass
@@ -68,10 +68,7 @@ class ReservoirModel(object):
             else:
                 input_array = input_array.reshape((-1, 1))
 
-        # if input_array.shape[0] == 1:
         return reservoir.update(np.dot(input_array, self.W_in))
-        # else:
-        #    return np.apply_along_axis(self.update, axis=1, arr=input_array, reservoir=reservoir)
 
     def train(self, feature, burn_in_feature=None, burn_in_split=0.1, teacher=None,
               error_fun=util.RMSE,
@@ -95,8 +92,6 @@ class ReservoirModel(object):
             # adjust feature accordingly
             burn_in_feature = feature[:burn_in_ind, :]
             feature = feature[burn_in_ind:, :]
-
-            print(burn_in_feature.shape)
 
             # and teacher if it has been provided
             if teacher is not None:
@@ -143,7 +138,8 @@ class ReservoirModel(object):
 
         return self
 
-    def predict(self, n_predictions=0, feature=None, simulation=True, return_states=False, inject_error=False):
+    def predict(self, n_predictions=0, feature=None, simulation=True, return_states=False,
+                inject_error=False, num_reps=1):
         """
         let the model predict
         :param n_predictions: number of predictions in free run mode. This only works if
@@ -151,41 +147,52 @@ class ReservoirModel(object):
         :param feature: features to predict
         :param simulation: (Boolean) if a copy of the reservoir should be used
         :param inject_error: (Boolean) if estimation error is added to the prediction
+        :param num_reps: if inject_error is True, number of 
+                         repetitions performed with different errors
         :return: predictions
         """
 
-        reservoir = self.reservoir.copy() if simulation else self.reservoir
+        #reservoir = self.reservoir.copy() if simulation else self.reservoir
         _feature = self.input_activation(self.input_scaler.scale(
             self.teacher[-1, :] if feature is None else feature))
 
-        prediction = np.zeros(shape=(n_predictions,), dtype=np.float64)
+        prediction = np.zeros(shape=(n_predictions, num_reps), dtype=np.float64)
 
         if return_states:
-            states = np.zeros(shape=(n_predictions, reservoir.size), dtype=np.float64)
-        else:
-            states = None
+            states = np.zeros(shape=(n_predictions, self.size, num_reps), dtype=np.float64)
 
-        for i in range(n_predictions):
+        with self.reservoir.simulate(simulation):
+            for rep in range(num_reps):
+                # inject error if set to true, else set errors to zeros
+                if inject_error:
+                    errors = np.random.choice(self._errors, n_predictions)
+                else:
+                    errors = np.zeros((n_predictions,))
 
-            # get new regressors for output model
-            x = self.update(_feature, reservoir=reservoir)
-            if return_states:
-                states[i, :] = x.flatten()
+                for i in range(n_predictions):
 
-            if self.regress_input:
-                x = np.hstack((_feature.flatten(), x.flatten()))
+                    # get new regressors for output model
+                    x = self.update(_feature)
 
-            # predict next value
-            pred = self.output_model.predict(x.reshape(1, -1))
-            output = self.output_scaler.unscale(pred.flatten())
-            prediction[i] = float(output)
+                    if return_states:
+                        states[i, :, rep] = x.flatten()
 
-            # transform output to new input and save it in variable _feature
-            _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
+                    if self.regress_input:
+                        x = np.hstack((_feature.flatten(), x.flatten()))
 
-            # inject error if set to true
-            if inject_error:
-                _feature += np.random.choice(self._errors, 1)
+                    # predict next value
+                    pred = self.output_model.predict(x.reshape(1, -1))
+                    output = self.output_scaler.unscale(pred.flatten())
+                    prediction[i, rep] = float(output)
+
+                    # transform output to new input and save it in variable _feature
+                    _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
+                    _feature += errors[i]
+
+        prediction = np.mean(prediction, axis=-1)
+        if return_states:
+            #states = np.mean(states, axis=-1)
+            pass
 
         if return_states:
             return prediction, states
@@ -260,7 +267,7 @@ class ReservoirModel(object):
     def error(self):
         try:
             cv_values = self.output_model.cv_values_
-            return np.mean(cv_values, axis=cv_values.shape[:-1])
+            return np.min(np.mean(cv_values, axis=0))
         except AttributeError:
             pass
 

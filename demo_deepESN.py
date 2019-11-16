@@ -8,7 +8,7 @@ import json
 
 np.random.seed(42)
 
-l = 2000  # length of mackey glass timeseries
+l = 4000  # length of mackey glass timeseries
 mg = MackeyGlass(l, drop_out=0.1).reshape((-1, 1))
 mg -= np.mean(mg)  # demean
 
@@ -21,7 +21,7 @@ test_teacher = mg[-n_pred:]
 # set up ESN and train
 e = deepESN()
 # adds three layers according to the spetral radii
-e.add_layer(spectral_radius=[0.9, 0.95, 0.99])
+e.add_layer(size=200, spectral_radius=[0.9, 0.95, 0.95], output=[False, False, True])
 r, result_dict = e.train(feature=train_feature, teacher=train_teacher, hyper_tuning=False,
                          exclude_hyper=['leak'])  # doesn't optimize the leak
 
