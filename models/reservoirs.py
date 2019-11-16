@@ -32,7 +32,7 @@ class BaseReservoir:
         return self
 
     def __exit__(self, type, value, traceback):
-        if self._saved_state:
+        if self._saved_state is not None:
             self._state = self._saved_state
             self._saved_state = None
 
@@ -225,7 +225,12 @@ class TopologicalReservoir(LeakyESNReservoir):
         if layer_to is None:
             layer_to = layer_from
         if matrix is None:
-            matrix = random_echo_matrix(size=(self.layers[layer_from]['size'], self.layers[layer_to]['size']), **kwargs)
+            s1 = self.layers[layer_from]['size']
+            s2 = self.layers[layer_to]['size']
+            if kwargs.get('sparsity', None) is None:
+                kwargs['sparsity'] = float(1-10/np.sqrt(s1*s2))
+
+            matrix = random_echo_matrix(size=(s1, s1), **kwargs)
         self._echo_view[layer_from, layer_to][:, :] = matrix
 
     def update(self, input_array):
