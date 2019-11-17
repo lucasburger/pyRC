@@ -1,7 +1,7 @@
 
 from copy import copy
 import numpy as np
-from .BaseModel import ReservoirModel
+from .BaseModel import ReservoirModel, OnlineReservoirModel
 from .reservoirs import ESNReservoir, LeakyESNReservoir, DeepESNReservoir, ESNReservoirArray
 from .scaler import tanh, identity
 from .. import util
@@ -84,3 +84,7 @@ class MultiStepESN(EchoStateNetwork):
 
     def predict(self, n_predictions=1, **kwargs):
         return np.hstack([esn.predict(n_predictions=1, **kwargs) for esn in self.networks])
+
+
+class OnlineESN(EchoStateNetwork, OnlineReservoirModel):
+    pass

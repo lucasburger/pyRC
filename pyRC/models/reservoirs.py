@@ -160,7 +160,7 @@ class LeakyESNReservoir(ESNReservoir):
     def _set_leak(self, x):
         self._leak = min([abs(x), 1.0])
 
-    def _set_state(self, x: np.array):
+    def _set_state(self, x):
         """
         This is using sparse matrices therefore it uses "simple" multiplication * instead of np.dot
         """

@@ -318,3 +318,43 @@ class ReservoirModel(object):
     @fitted.setter
     def fitted(self, x):
         self._fitted = x
+
+
+class OnlineReservoirModel(ReservoirModel):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.W_fb = None
+        if not hasattr(kwargs.get('output_model'), 'update_weights'):
+            raise ValueError("Output model can not be trained online. It needs 'update_weight' method.")
+
+    # def train(self, *args, **kwargs):
+    #     r = super().train(*args, **kwargs)
+    #     self.W_fb = util.matrix_uniform(self.reservoir.size, self._teacher.shape[1])
+    #     return r
+
+    def _train(self):
+        """
+        This method can be used after new hyper_parameter shave been set. 
+        It only uses the instance variables (burn_in-) feature and teacher
+        """
+
+        self.update(self._burn_in_feature)
+
+        self._errors = np.zeros_like(self._teacher)
+
+        for i in range(self._feature.shape[0]):
+
+            f = self._feature[i, :].reshape((1, -1))
+            t = self._teacher[i, :].reshape((1, -1))
+
+            x = self.update(f).reshape((1, -1))
+            if self.regress_input:
+                x = np.hstack((f, x))
+
+            # fit output model and calculate errors
+            self.output_model.fit(x, t)
+            pred = self.output_model.predict(x)
+            self._errors[i, :] = t - pred
+
+        return x
