@@ -1,9 +1,9 @@
 
 from copy import copy
 import numpy as np
-from models.BaseModel import ReservoirModel
-from models.reservoirs import ESNReservoir, LeakyESNReservoir, DeepESNReservoir, ESNReservoirArray
-from models.scaler import tanh, identity
+from .BaseModel import ReservoirModel
+from .reservoirs import ESNReservoir, LeakyESNReservoir, DeepESNReservoir, ESNReservoirArray
+from .scaler import tanh, identity
 import util
 
 

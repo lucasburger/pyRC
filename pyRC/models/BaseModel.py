@@ -4,8 +4,8 @@ import numpy as np
 from .output_models import GaussianElimination
 from .reservoirs import BaseReservoir
 from .scaler import tanh, identity
-import util
-import optimizer
+from . import util
+from . import optimizer
 
 
 class ReservoirModel(object):

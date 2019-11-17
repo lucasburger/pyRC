@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-from pyRC.models import deepESN
-from pyRC.util import MackeyGlass, RMSE
+from .models import deepESN
+from .util import MackeyGlass, RMSE
 import numpy as np
 import matplotlib.pyplot as plt
 import json
