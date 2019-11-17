@@ -184,6 +184,10 @@ class ReservoirModel(object):
 
                     # predict next value
                     pred = self.output_model.predict(x.reshape(1, -1))
+                    if isinstance(pred, tuple):
+                        pred, extra = pred[0], pred[1:]
+                        yield extra
+
                     output = self.output_scaler.unscale(pred.flatten())
                     prediction[i, rep] = float(output)
 

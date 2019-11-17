@@ -135,7 +135,7 @@ class MinEigenvalueRegression(BaseOutputModel):
 
 class GaussianElimination:
 
-    def __init__(self, add_intercept: bool = True, ridgelambda: float = 0.0):
+    def __init__(self, add_intercept: bool = True, ridgelambda: float = 0.0, **kwargs):
         self.add_intercept = True
         self.beta = None
         self.ridgelambda = ridgelambda
@@ -165,32 +165,60 @@ class GaussianElimination:
         return np.dot(x, self.beta)
 
 
-spec = [
-    ('add_intercept', numba.bool_),
-    # ('ridgelambda', numba.float32),               # a simple scalar field
-    # ('_error', numba.float32),               # a simple scalar field
-    ('beta', numba.float64[:, :]),
-    # ('fitted', numba.float64[:])          # an array field
-]
+class ExpertEvaluation(BaseOutputModel):
 
+    def __init__(self, sizes=None, learning_rate=1e-3, reservoir=None, **kwargs):
+        if reservoir is not None:
+            self.reservoir = reservoir
+            self.sizes = [r.size for r in reservoir.reservoirs]
+        elif sizes is not None:
+            self.sizes = sizes
+            self.reservoir = None
+        else:
+            raise ValueError("either sizes or reservoir mus be provided")
 
-@numba.jitclass(spec)
-class NumbaGaussianElimination:
+        self.output_models = [GaussianElimination() for s in self.sizes]
+        self.weights = np.array([1/len(self.sizes)]*len(self.sizes))
+        self.learning_rate = learning_rate
 
-    def __init__(self, add_intercept: bool = True):
-        self.add_intercept = True
-        self.beta = np.zeros(shape=(1, 1), dtype=np.float64)
+    def fit(self, x, y):
+        for ind, m in zip(self.indices, self.output_models):
+            m.fit(x[:, ind], y)
 
-    def fit(self, x: np.ndarray, y: np.ndarray):
+    def predict(self, x, target=None):
+        if x.ndim == 1:
+            x = x.reshape((1, -1))
+        if target.ndim == 1:
+            target = target.reshape((1, -1))
 
-        if self.add_intercept:
-            x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
+        pred = np.zeros((x.shape[0], 1))
+        for i in range(x.shape[0]):
+            preds = []
+            for ind, m in zip(self.indices, self.output_models):
+                preds.append(m.predict(x[i, ind].reshape((1, -1))))
+            preds = np.hstack(preds).flatten()
+            if target is not None:
+                errors = (preds - target[i, :]).flatten()
+                self.update_weights(errors)
+                yield errors
+            else:
+                yield preds
 
-        self.beta = np.dot(np.linalg.pinv(x), y)
+            pred[i] = np.dot(preds, self.weights)
 
-        return
+        return pred, errors
 
-    def predict(self, x: np.ndarray):
-        if self.add_intercept:
-            x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
-        return np.dot(x, self.beta)
+    def update_weights(self, errors):
+        self.weights *= np.exp(-self.learning_rate*errors)
+        self.weights /= np.sum(self.weights)
+        return errors
+
+    @property
+    def indices(self):
+        inds = [0] + np.cumsum(self.sizes).tolist()
+        for i, j in zip(inds[:-1], inds[1:]):
+            yield list(range(i, j))
+
+    @property
+    def size(self):
+        return sum(self.sizes)

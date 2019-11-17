@@ -8,13 +8,11 @@ Documentation is "not very good" to "almost not existent". This will come in lat
 
 ## Installation
 
-From source (using git):
+With pip from this GitHub repo:
 
 ````
-git clone https://github.com/lucasburger/pyRC.git
-cd pyRC
-pip3 install -r requirements.txt
-````
+pip install git+https://github.com/lucasburger/pyRC.git
+´´´´
 
 ## The Library
 
@@ -34,33 +32,6 @@ pip3 install -r requirements.txt
 
 Output models can basically be chosen from any [scikit-learn](https://scikit-learn.org/stable/) model having a fit and predict method. In case, the model performs cross validation, make sure to store the cv-scores. 
 Alternatively, they can be specified separately and, for convenience, can derive from model.output_models.BaseOutputModel:
-
- ```python
-from abc import ABCMeta, abstractmethod, abstractproperty
-
-
-class BaseOutputModel:
-    __metaclass__ = ABCMeta
-
-    @abstractmethod
-    def fit(self, x, y):
-        """
-        This function must be overridden by subclasses.
-        """
-        pass
-
-    @abstractmethod
-    def predict(self, x):
-        """
-        This function must be overridden by subclasses.
-        """
-        pass
-
-    @abstractproperty
-    def error(self):
-        pass
-
-```
 
 ### Hyperparameter Optimization
 
@@ -108,3 +79,35 @@ plt.show(block=True)
 ```
 
 
+## Basic Usage
+
+### Output Models
+
+To write your own output_models, your own classes can inherit from pyRC.output_models.BaseOutputModel for convenience.
+
+ ```python
+from abc import ABCMeta, abstractmethod, abstractproperty
+
+
+class BaseOutputModel:
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def fit(self, x, y):
+        """
+        This function must be overridden by subclasses.
+        """
+        pass
+
+    @abstractmethod
+    def predict(self, x):
+        """
+        This function must be overridden by subclasses.
+        """
+        pass
+
+    @abstractproperty
+    def error(self):
+        pass
+
+```

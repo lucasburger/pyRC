@@ -347,6 +347,7 @@ class ESNReservoirArray:
     hyper_params = {}
     _fixed_size = None
     _saved_state = None
+    _reservoir_class = LeakyESNReservoir
 
     def __init__(self, *args, **kwargs):
         self.reservoirs = list()
@@ -354,20 +355,18 @@ class ESNReservoirArray:
             self.add_reservoir(**kwargs)
             self.fixed_size = self.reservoirs[-1].size
 
+    @make_kwargs_one_length
     def add_reservoir(self, **kwargs):
-        new_res = LeakyESNReservoir(**kwargs)
+        new_res = self._reservoir_class(**kwargs)
         self.reservoirs.append(new_res)
         self.hyper_params = update_hyperparams(self.hyper_params, new_res.hyper_params)
 
     def update(self, input_array):
         return np.hstack([r.update(input_array) for r in self.reservoirs])
 
-    def copy(self):
-        return deepcopy(self)
-
     def reset(self):
         for r in self.reservoirs:
-            r._state = np.zeros(shape=(r.size,), dtype=np.float64)
+            r.reset()
 
     def simulate(self, simulate=True):
         if simulate:
