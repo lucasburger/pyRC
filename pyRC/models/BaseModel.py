@@ -342,21 +342,11 @@ class OnlineReservoirModel(ReservoirModel):
         self.update(self._burn_in_feature)
 
         self._fitted = np.zeros_like(self._teacher)
-
-        for i in range(self._feature.shape[0]):
-
-            f = self._feature[i, :].reshape((1, -1))
-            t = self._teacher[i, :].reshape((1, -1))
-
-            x = self.update(f).reshape((1, -1))
-            if self.regress_input:
-                x = np.hstack((f, x))
-
-            # fit output model and calculate errors
-            self.output_model.fit(x, t)
-            self._fitted[i, :] = self.output_model.predict(x)
-
-        self._errors = (self._fitted - self._teacher)
+        x = self.update(self._feature)
+        if self.regress_input:
+            x = np.hstack((self._feature, x))
+        self._fitted = self.output_model.fit(x, self._teacher)
+        self._errors = self.output_model._errors
 
         return x
 

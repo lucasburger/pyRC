@@ -9,6 +9,7 @@ class RecursiveLeastSquares(BaseOutputModel):
         self.add_intercept = add_intercept
         self.beta = np.zeros((size, 1), dtype=np.float64)
         self._gamma = np.eye(size, dtype=np.float64)
+        self._fitted = np.zeros((1,))
         self._errors = np.zeros((1,))
 
     def _update_size(self, size):
@@ -27,10 +28,12 @@ class RecursiveLeastSquares(BaseOutputModel):
 
         self._update_size(x.shape[1])
 
-        self._errors = np.zeros_like(y)
+        self._fitted = np.zeros_like(y)
 
         for i in range(x.shape[0]):
-            self._errors[i] = self.update_weight(x[i, :].reshape((-1, 1)), y[i, :].reshape((-1, 1)))
+            self._fitted[i] = self.update_weight(x[i, :].reshape((-1, 1)), y[i, :].reshape((-1, 1)))
+        self._errors = self._fitted - y
+        return self._fitted
 
     def update_weight(self, x, y):
         self._gamma -= (self._gamma @ x @ x.T @ self._gamma) / (1 + x.T @ self._gamma @ x)
