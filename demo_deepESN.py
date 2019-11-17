@@ -5,6 +5,8 @@ from util import MackeyGlass, RMSE
 import numpy as np
 import matplotlib.pyplot as plt
 import json
+import util
+import scipy
 
 np.random.seed(42)
 
@@ -21,9 +23,11 @@ test_teacher = mg[-n_pred:]
 # set up ESN and train
 e = deepESN()
 # adds three layers according to the spetral radii
-e.add_layer(size=200, spectral_radius=[0.9, 0.95, 0.95], output=[False, False, True])
+e.add_layer(size=1000, spectral_radius=[0.9, 0.95], output=[False, True])
+#e.reservoir._echo = scipy.sparse.csr_matrix(util.random_echo_matrix(size=400))
 r, result_dict = e.train(feature=train_feature, teacher=train_teacher, hyper_tuning=False,
                          exclude_hyper=['leak'])  # doesn't optimize the leak
+
 
 # forecast
 pred = e.predict(n_predictions=n_pred, simulation=True)

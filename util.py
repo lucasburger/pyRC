@@ -290,8 +290,8 @@ class MultivariateFunction:
 
         num_params = r.num_params
 
-        # if spectral_radius:
-        #     spectral_radius /= num_params
+        if spectral_radius:
+            spectral_radius **= 1/num_params
 
         if matrix_type == 'full':
             coeff = [random_echo_matrix(size=shape, sparsity=sparsity, spectral_radius=spectral_radius)

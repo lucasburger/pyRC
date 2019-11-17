@@ -85,7 +85,8 @@ def optimizer(model, error_fun=None, dimensions=None, minimizer=None, exclude_hy
         e.set_params(**hyper_params)
         e.reservoir.reset()
 
-        error = e._train().error
+        e._train()
+        error = e.error
         try:
             error = error['outofsample']
         except IndexError:
