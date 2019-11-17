@@ -34,7 +34,7 @@ class parallelESN(EchoStateNetwork):
 
     @property
     def reservoirs(self):
-        return getattr(self.reservoir, 'reservoir', None)
+        return getattr(self.reservoir, 'reservoirs', None)
 
 
 class MultiStepESN(EchoStateNetwork):

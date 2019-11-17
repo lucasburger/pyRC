@@ -188,7 +188,7 @@ class ExpertEvaluation(BaseOutputModel):
     def predict(self, x, target=None):
         if x.ndim == 1:
             x = x.reshape((1, -1))
-        if target.ndim == 1:
+        if target is not None and target.ndim == 1:
             target = target.reshape((1, -1))
 
         pred = np.zeros((x.shape[0], 1))
@@ -197,10 +197,6 @@ class ExpertEvaluation(BaseOutputModel):
             for ind, m in zip(self.indices, self.output_models):
                 preds.append(m.predict(x[i, ind].reshape((1, -1))))
             preds = np.hstack(preds).flatten()
-            if target is not None:
-                errors = (preds - target[i, :]).flatten()
-                self.update_weights(errors)
-                yield errors
 
             pred[i] = np.dot(preds, self.weights)
 
