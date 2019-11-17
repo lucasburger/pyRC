@@ -1,3 +1,3 @@
 from .EchoStateNetwork import *
 from .StateAffineSystem import *
-import output_models
+from . import output_models
