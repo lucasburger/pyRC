@@ -201,12 +201,10 @@ class ExpertEvaluation(BaseOutputModel):
                 errors = (preds - target[i, :]).flatten()
                 self.update_weights(errors)
                 yield errors
-            else:
-                yield preds
 
             pred[i] = np.dot(preds, self.weights)
 
-        return pred, errors
+        return pred
 
     def update_weights(self, errors):
         self.weights *= np.exp(-self.learning_rate*errors)
