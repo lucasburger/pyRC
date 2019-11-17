@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-from models import EchoStateNetwork as ESN
-from util import MackeyGlass, RMSE, NRMSE, MSE
+from pyRC.models import EchoStateNetwork as ESN
+from pyRC.util import MackeyGlass, RMSE, NRMSE, MSE
 import numpy as np
 import matplotlib.pyplot as plt
 import json
