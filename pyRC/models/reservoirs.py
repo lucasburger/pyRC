@@ -1,12 +1,12 @@
 import numpy as np
-from util import matrix_uniform, expand_echo_matrix, random_echo_matrix
-from util import make_kwargs_one_length, update_hyperparams
-from util import MultivariatePolynomial, MultivariateTrigoPolynomial, identity
+from ..util import matrix_uniform, expand_echo_matrix, random_echo_matrix
+from ..util import make_kwargs_one_length, update_hyperparams
+from ..util import MultivariatePolynomial, MultivariateTrigoPolynomial, identity
 from numpy.lib.stride_tricks import as_strided
 from scipy import sparse
 from copy import deepcopy
 import numba
-from util import self_activation
+from ..util import self_activation
 
 
 class BaseReservoir:

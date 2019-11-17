@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.linear_model import RidgeCV, RidgeClassifier, Lars
 import sklearn.linear_model
 from copy import deepcopy
-import util
+from .. import util
 import numba
 
 from abc import ABCMeta, abstractmethod, abstractproperty

@@ -5,7 +5,7 @@ from .util import MackeyGlass, RMSE
 import numpy as np
 import matplotlib.pyplot as plt
 import json
-import util
+from .. import util
 import scipy
 
 np.random.seed(42)
