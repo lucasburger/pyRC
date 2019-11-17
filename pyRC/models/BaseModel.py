@@ -341,8 +341,8 @@ class OnlineReservoirModel(ReservoirModel):
 
         self.update(self._burn_in_feature)
 
-        self._fitted = np.zeros_like(self._teacher)
         x = self.update(self._feature)
+
         if self.regress_input:
             x = np.hstack((self._feature, x))
         self._fitted = self.output_model.fit(x, self._teacher)
@@ -393,7 +393,7 @@ class OnlineReservoirModel(ReservoirModel):
                         x = np.hstack((_feature.flatten(), x.flatten()))
 
                     # predict next value
-                    pred = self.output_model.predict(x.reshape(-1, 1))
+                    pred = self.output_model.predict(x.reshape(1, -1))
                     output = self.output_scaler.unscale(pred.flatten())
                     prediction[i, rep] = float(output)
 
