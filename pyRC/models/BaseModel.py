@@ -325,7 +325,7 @@ class OnlineReservoirModel(ReservoirModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.W_fb = None
-        if not hasattr(kwargs.get('output_model'), 'update_weights'):
+        if not hasattr(self.output_model, 'update_weight'):
             raise ValueError("Output model can not be trained online. It needs 'update_weight' method.")
 
     # def train(self, *args, **kwargs):
@@ -341,7 +341,7 @@ class OnlineReservoirModel(ReservoirModel):
 
         self.update(self._burn_in_feature)
 
-        self._errors = np.zeros_like(self._teacher)
+        self._fitted = np.zeros_like(self._teacher)
 
         for i in range(self._feature.shape[0]):
 
@@ -354,7 +354,68 @@ class OnlineReservoirModel(ReservoirModel):
 
             # fit output model and calculate errors
             self.output_model.fit(x, t)
-            pred = self.output_model.predict(x)
-            self._errors[i, :] = t - pred
+            self._fitted[i, :] = self.output_model.predict(x)
+
+        self._errors = (self._fitted - self._teacher)
 
         return x
+
+    def predict(self, n_predictions=0, feature=None, simulation=True, return_states=False,
+                inject_error=False, num_reps=1):
+        """
+        let the model predict
+        :param n_predictions: number of predictions in free run mode. This only works if
+        number of outputs is equal to the number of inputs
+        :param feature: features to predict
+        :param simulation: (Boolean) if a copy of the reservoir should be used
+        :param inject_error: (Boolean) if estimation error is added to the prediction
+        :param num_reps: if inject_error is True, number of 
+                         repetitions performed with different errors
+        :return: predictions
+        """
+
+        #reservoir = self.reservoir.copy() if simulation else self.reservoir
+        _feature = self.input_activation(self.input_scaler.scale(
+            self.teacher[-1, :] if feature is None else feature))
+
+        prediction = np.zeros(shape=(n_predictions, num_reps), dtype=np.float64)
+
+        if return_states:
+            states = np.zeros(shape=(n_predictions, self.size, num_reps), dtype=np.float64)
+
+        with self.reservoir.simulate(simulation):
+            for rep in range(num_reps):
+                # inject error if set to true, else set errors to zeros
+                if inject_error:
+                    errors = np.random.choice(self._errors, n_predictions)
+                else:
+                    errors = np.zeros((n_predictions,))
+
+                for i in range(n_predictions):
+
+                    # get new regressors for output model
+                    x = self.update(_feature)
+
+                    if return_states:
+                        states[i, :, rep] = x.flatten()
+
+                    if self.regress_input:
+                        x = np.hstack((_feature.flatten(), x.flatten()))
+
+                    # predict next value
+                    pred = self.output_model.predict(x.reshape(-1, 1))
+                    output = self.output_scaler.unscale(pred.flatten())
+                    prediction[i, rep] = float(output)
+
+                    # transform output to new input and save it in variable _feature
+                    _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
+                    _feature += errors[i]
+
+        prediction = np.mean(prediction, axis=-1)
+        if return_states:
+            states = np.mean(states, axis=-1)
+
+        if return_states:
+            return prediction, states
+        else:
+            return prediction

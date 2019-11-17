@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from pyRC.models import OnlineESN as ESN
+from pyRC.models.output_models_online import RLS
 from pyRC.util import MackeyGlass, RMSE, NRMSE, MSE
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,7 +18,7 @@ train_feature = mg[:-n_pred]
 test_teacher = mg[-n_pred:]
 
 # set up ESN and train
-e = ESN(size=1000, bias=0.2, spectral_radius=0.95)
+e = ESN(size=200, bias=0.2, spectral_radius=0.95, output_model=RLS())
 r, result_dict = e.train(feature=train_feature, hyper_tuning=False, exclude_hyper=['leak'], error_fun=NRMSE)
 
 # forecast
