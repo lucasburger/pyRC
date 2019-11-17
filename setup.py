@@ -15,7 +15,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://lucasburger.github.io/pyRC",
-    packages=setuptools.find_packages(),
+    packages=['pyRC'],
     classifiers=[
         "Programming Language :: Python :: 3"
     ],
