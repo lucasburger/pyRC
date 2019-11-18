@@ -124,7 +124,7 @@ class ReservoirModel(object):
 
     def _train(self):
         """
-        This method can be used after new hyper_parameter shave been set. 
+        This method can be used after new hyper_parameter shave been set.
         It only uses the instance variables (burn_in-) feature and teacher
         """
 
@@ -149,34 +149,45 @@ class ReservoirModel(object):
         :param feature: features to predict
         :param simulation: (Boolean) if a copy of the reservoir should be used
         :param inject_error: (Boolean) if estimation error is added to the prediction
-        :param num_reps: if inject_error is True, number of 
+        :param num_reps: if inject_error is True, number of
                          repetitions performed with different errors
         :return: predictions
         """
+
+        if not inject_error:
+            num_reps = 1
 
         #reservoir = self.reservoir.copy() if simulation else self.reservoir
         _feature = self.input_activation(self.input_scaler.scale(
             self.teacher[-1, :] if feature is None else feature))
 
-        prediction = np.zeros(shape=(n_predictions, num_reps), dtype=np.float64)
+        # allocate storage for predictions
+        prediction = np.zeros(n_predictions, num_reps, dtype=np.float64)
 
-        if return_states:
+        # allocate storage for states if return_states=True or if num_reps > 1 and no simulation,
+        # as then, we need to save the states to set the state of the reservoir after the repititions
+        if return_states or num_reps > 1 and not simulation:
             states = np.zeros(shape=(n_predictions, self.size, num_reps), dtype=np.float64)
+        else:
+            states = None
 
-        with self.reservoir.simulate(simulation):
-            for rep in range(num_reps):
+        # loop over predictions
+        for rep in range(num_reps):
+            with self.reservoir.simulate(simulation):
                 # inject error if set to true, else set errors to zeros
                 if inject_error:
                     errors = np.random.choice(self._errors, n_predictions)
                 else:
                     errors = np.zeros((n_predictions,))
 
+                # predict n_predictions times
                 for i in range(n_predictions):
 
                     # get new regressors for output model
                     x = self.update(_feature)
 
-                    if return_states:
+                    # save states if needed
+                    if states is not None:
                         states[i, :, rep] = x.flatten()
 
                     if self.regress_input:
@@ -191,10 +202,17 @@ class ReservoirModel(object):
                     _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
                     _feature += errors[i]
 
+        # average of num_preds of all predictions
         prediction = np.mean(prediction, axis=-1)
-        if return_states:
-            states = np.mean(states, axis=-1)
 
+        # same for the states
+        states = np.mean(states, axis=-1)
+
+        # if num_reps > 1 and simulation, set the state of the reservoir to the average state a n_predictions
+        if not simulation and num_reps > 1:
+            self.reservoir._state[:] = states[-1, :]
+
+        # return values according to input
         if return_states:
             return prediction, states
         else:
@@ -328,14 +346,9 @@ class OnlineReservoirModel(ReservoirModel):
         if not hasattr(self.output_model, 'update_weight'):
             raise ValueError("Output model can not be trained online. It needs 'update_weight' method.")
 
-    # def train(self, *args, **kwargs):
-    #     r = super().train(*args, **kwargs)
-    #     self.W_fb = util.matrix_uniform(self.reservoir.size, self._teacher.shape[1])
-    #     return r
-
     def _train(self):
         """
-        This method can be used after new hyper_parameter shave been set. 
+        This method can be used after new hyper_parameter shave been set.
         It only uses the instance variables (burn_in-) feature and teacher
         """
 
@@ -351,7 +364,8 @@ class OnlineReservoirModel(ReservoirModel):
         return x
 
     def predict(self, n_predictions=0, feature=None, simulation=True, return_states=False,
-                inject_error=False, num_reps=1):
+                inject_error=False, num_reps=1,
+                teacher=None, yield_intermediate=True):
         """
         let the model predict
         :param n_predictions: number of predictions in free run mode. This only works if
@@ -359,9 +373,9 @@ class OnlineReservoirModel(ReservoirModel):
         :param feature: features to predict
         :param simulation: (Boolean) if a copy of the reservoir should be used
         :param inject_error: (Boolean) if estimation error is added to the prediction
-        :param num_reps: if inject_error is True, number of 
+        :param num_reps: if inject_error is True, number of
                          repetitions performed with different errors
-        :return: predictions
+        :return: prediction generator
         """
 
         #reservoir = self.reservoir.copy() if simulation else self.reservoir
@@ -370,11 +384,14 @@ class OnlineReservoirModel(ReservoirModel):
 
         prediction = np.zeros(shape=(n_predictions, num_reps), dtype=np.float64)
 
-        if return_states:
+        if return_states or num_reps > 1 and not simulation:
             states = np.zeros(shape=(n_predictions, self.size, num_reps), dtype=np.float64)
+        else:
+            states = None
 
-        with self.reservoir.simulate(simulation):
-            for rep in range(num_reps):
+        for rep in range(num_reps):
+
+            with self.reservoir.simulate(simulation):
                 # inject error if set to true, else set errors to zeros
                 if inject_error:
                     errors = np.random.choice(self._errors, n_predictions)
@@ -386,7 +403,7 @@ class OnlineReservoirModel(ReservoirModel):
                     # get new regressors for output model
                     x = self.update(_feature)
 
-                    if return_states:
+                    if states is not None:
                         states[i, :, rep] = x.flatten()
 
                     if self.regress_input:
@@ -394,6 +411,14 @@ class OnlineReservoirModel(ReservoirModel):
 
                     # predict next value
                     pred = self.output_model.predict(x.reshape(1, -1))
+                    if isinstance(pred, tuple):
+                        pred, extra_output = pred[0], pred[1:]
+
+                    if yield_intermediate and teacher is None:
+                        yield extra_output
+                    elif teacher is not None:
+                        self.output_model.update_weight(error=pred[1:]-teacher[i, :])
+
                     output = self.output_scaler.unscale(pred.flatten())
                     prediction[i, rep] = float(output)
 
@@ -402,10 +427,59 @@ class OnlineReservoirModel(ReservoirModel):
                     _feature += errors[i]
 
         prediction = np.mean(prediction, axis=-1)
-        if return_states:
+        if states is not None:
             states = np.mean(states, axis=-1)
+            if not simulation:
+                self.reservoir._state[:] = states[-1, :]
 
         if return_states:
             return prediction, states
         else:
             return prediction
+
+    def predictor(self, feature=None, simulation=True):
+     """
+        let the model predict
+        :param n_predictions: number of predictions in free run mode. This only works if
+        number of outputs is equal to the number of inputs
+        :param feature: features to predict
+        :param simulation: (Boolean) if a copy of the reservoir should be used
+        :param inject_error: (Boolean) if estimation error is added to the prediction
+        :param num_reps: if inject_error is True, number of
+                         repetitions performed with different errors
+        :return: prediction generator
+        """
+
+      #reservoir = self.reservoir.copy() if simulation else self.reservoir
+      _feature = self.input_activation(self.input_scaler.scale(
+           self.teacher[-1, :] if feature is None else feature))
+
+       with self.reservoir.simulate(simulation):
+            
+
+            # get new regressors for output model
+            x = self.update(_feature)
+
+            if states is not None:
+                states[i, :, rep] = x.flatten()
+
+            if self.regress_input:
+                x = np.hstack((_feature.flatten(), x.flatten()))
+
+            # predict next value
+            pred = self.output_model.predict(x.reshape(1, -1))
+            if isinstance(pred, tuple):
+                pred, extra_output = pred[0], pred[1:]
+            else:
+                extra_output = None
+
+            output = self.output_scaler.unscale(pred.flatten())
+
+            yield output, extra_output
+
+            update_weight_args = yield
+            if update_weight_args is not None:
+                self.output_model.update_weight(*update_weight_args)
+
+            # transform output to new input and save it in variable _feature
+            _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))

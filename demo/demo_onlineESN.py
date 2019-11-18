@@ -21,8 +21,18 @@ test_teacher = mg[-n_pred:]
 e = ESN(size=200, bias=0.2, spectral_radius=0.95, output_model=RLS())
 r, result_dict = e.train(feature=train_feature, hyper_tuning=False, exclude_hyper=['leak'], error_fun=NRMSE)
 
+pred = np.zeros(shape=(n_pred,), dtype=np.float64)
 # forecast
-pred = e.predict(n_predictions=n_pred, simulation=True)
+g = e.predictor()
+p = next(g)
+g.send()
+i = 0
+pred[i] = p
+i += 1
+while i < n_pred:
+    pred[i] = next(g)
+    g.send(test_teacher[i-1, :], test_teacher[i, :])
+
 test_error = MSE(pred, test_teacher)
 
 # visualize results

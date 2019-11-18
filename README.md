@@ -8,7 +8,7 @@ Documentation is "not very good" to "almost not existent". This will come in lat
 
 ## Installation
 
-With pip from this GitHub repo:
+With pip and git from this GitHub repo:
 
 ````
 pip install git+https://github.com/lucasburger/pyRC.git
