@@ -37,7 +37,7 @@ class ExpertEvaluation(BaseOutputModel):
                 preds.append(m.predict(x[i, ind].reshape((1, -1))))
             experts[i, :] = np.hstack(preds).flatten()
 
-        pred = np.dot(preds, self.weights)
+        pred = np.dot(experts, self.weights)
 
         return pred, experts
 
