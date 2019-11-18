@@ -450,11 +450,11 @@ class OnlineReservoirModel(ReservoirModel):
         :return: prediction generator
         """
 
-      #reservoir = self.reservoir.copy() if simulation else self.reservoir
-      _feature = self.input_activation(self.input_scaler.scale(
+        #reservoir = self.reservoir.copy() if simulation else self.reservoir
+        _feature = self.input_activation(self.input_scaler.scale(
            self.teacher[-1, :] if feature is None else feature))
 
-       with self.reservoir.simulate(simulation):
+        with self.reservoir.simulate(simulation):
             
 
             # get new regressors for output model
