@@ -456,18 +456,10 @@ class OnlineReservoirModel(ReservoirModel):
 
             # predict next value
             pred = self.output_model.predict(x.reshape(1, -1))
-            if isinstance(pred, tuple):
-                pred, extra_output = pred[0], pred[1:]
-            else:
-                extra_output = None
 
             output = self.output_scaler.unscale(pred.flatten())
 
-            yield output, extra_output
-
-            update_weight_args = yield
-            if update_weight_args is not None:
-                self.output_model.update_weight(*update_weight_args)
+            yield output, x
 
             # transform output to new input and save it in variable _feature
             _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))

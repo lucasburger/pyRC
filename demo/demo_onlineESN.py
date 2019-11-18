@@ -24,14 +24,11 @@ r, result_dict = e.train(feature=train_feature, hyper_tuning=False, exclude_hype
 pred = np.zeros(shape=(n_pred,), dtype=np.float64)
 # forecast
 g = e.predictor()
-p = next(g)
-g.send()
 i = 0
-pred[i] = p
-i += 1
 while i < n_pred:
-    pred[i] = next(g)
-    g.send(test_teacher[i-1, :], test_teacher[i, :])
+    pred[i], state = next(g)
+    state = np.hstack((np.ones((1,)), state))
+    e.output_model.update_weight(state.reshape((1, -1)), test_teacher[i, :].reshape((1, -1)))
 
 test_error = MSE(pred, test_teacher)
 
