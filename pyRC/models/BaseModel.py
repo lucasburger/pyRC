@@ -135,13 +135,14 @@ class ReservoirModel(object):
 
         # fit output model and calculate errors
         self.output_model.fit(x, self._teacher)
-        self._fitted = self.output_model.predict(x)
+        self._fitted, *_ = self.output_model.predict(x)
         self._errors = (self._fitted - self._teacher).flatten()
 
         return x
 
     def predict(self, n_predictions=0, feature=None, simulation=True, return_states=False,
-                inject_error=False, num_reps=1):
+                inject_error=False, num_reps=1,
+                return_extra=False):
         """
         let the model predict
         :param n_predictions: number of predictions in free run mode. This only works if
@@ -157,12 +158,12 @@ class ReservoirModel(object):
         if not inject_error:
             num_reps = 1
 
-        #reservoir = self.reservoir.copy() if simulation else self.reservoir
+        # reservoir = self.reservoir.copy() if simulation else self.reservoir
         _feature = self.input_activation(self.input_scaler.scale(
             self.teacher[-1, :] if feature is None else feature))
 
         # allocate storage for predictions
-        prediction = np.zeros(n_predictions, num_reps, dtype=np.float64)
+        prediction = np.zeros((n_predictions, num_reps), dtype=np.float64)
 
         # allocate storage for states if return_states=True or if num_reps > 1 and no simulation,
         # as then, we need to save the states to set the state of the reservoir after the repititions
@@ -170,6 +171,8 @@ class ReservoirModel(object):
             states = np.zeros(shape=(n_predictions, self.size, num_reps), dtype=np.float64)
         else:
             states = None
+
+        extra = []
 
         # loop over predictions
         for rep in range(num_reps):
@@ -194,7 +197,8 @@ class ReservoirModel(object):
                         x = np.hstack((_feature.flatten(), x.flatten()))
 
                     # predict next value
-                    pred = self.output_model.predict(x.reshape(1, -1))
+                    pred, *extras = self.output_model.predict(x.reshape(1, -1))
+                    extra.append(extras)
                     output = self.output_scaler.unscale(pred.flatten())
                     prediction[i, rep] = float(output)
 
@@ -206,7 +210,8 @@ class ReservoirModel(object):
         prediction = np.mean(prediction, axis=-1)
 
         # same for the states
-        states = np.mean(states, axis=-1)
+        if states is not None:
+            states = np.mean(states, axis=-1)
 
         # if num_reps > 1 and simulation, set the state of the reservoir to the average state a n_predictions
         if not simulation and num_reps > 1:
@@ -214,9 +219,15 @@ class ReservoirModel(object):
 
         # return values according to input
         if return_states:
-            return prediction, states
+            if return_extra:
+                return prediction, states, extra
+            else:
+                return prediction, states
         else:
-            return prediction
+            if return_extra:
+                return prediction, extra
+            else:
+                return prediction
 
     def output_to_input(self, x):
         return self.input_activation(self.input_scaler.scale(self.output_scaler.unscale(x)))
@@ -342,82 +353,131 @@ class OnlineReservoirModel(ReservoirModel):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._last_feature = None
         if not hasattr(self.output_model, 'update_weight'):
             raise ValueError("Output model can not be trained online. It needs 'update_weight' method.")
 
-    def predictor(self, simulation=True, send_new_target=True):
-        if send_new_target:
-            return self.predictor_with_teacher(simulation=simulation)
+    def predict(self, n_predictions=1, **kwargs):
+        """
+        let the model predict
+        :param n_predictions: number of predictions in free run mode. This only works if
+        number of outputs is equal to the number of inputs
+        :param feature: features to predict
+        :param simulation: (Boolean) if a copy of the reservoir should be used
+        :param inject_error: (Boolean) if estimation error is added to the prediction
+        :param num_reps: if inject_error is True, number of
+                         repetitions performed with different errors
+        :return: predictions
+        """
+        # reservoir = self.reservoir.copy() if simulation else self.reservoir
+        feature = kwargs.get('feature', None)
+        if self._last_feature is None:
+            _feature = self.input_activation(self.input_scaler.scale(
+                self.teacher[-1, :] if feature is None else feature))
         else:
-            return self.predictor_without_teacher(simulation=simulation)
+            _feature = self._last_feature if feature is None else feature
 
-    def predictor_without_teacher(self, simulation=True):
-        """
-        let the model predict
-        :param n_predictions: number of predictions in free run mode. This only works if
-        number of outputs is equal to the number of inputs
-        :param feature: features to predict
-        :param simulation: (Boolean) if a copy of the reservoir should be used
-        :param inject_error: (Boolean) if estimation error is added to the prediction
-        :param num_reps: if inject_error is True, number of
-                        repetitions performed with different errors
-        :return: prediction generator
-        """
+        if n_predictions == 1:
+            with self.reservoir.simulate(kwargs.get('simulation', False)):
+                # get new regressors for output model
+                x = self.update(_feature)
 
-        #reservoir = self.reservoir.copy() if simulation else self.reservoir
-        _feature = self.input_activation(self.input_scaler.scale(self.teacher[-1, :]))
+                if self.regress_input:
+                    x = np.hstack((_feature.flatten(), x.flatten()))
 
-        with self.reservoir.simulate(simulation):
+                # predict next value
+                pred = self.output_model.predict(x.reshape(1, -1))
+                if isinstance(pred, tuple):
+                    pred, rest = pred[0], pred[1:]
+                    if len(rest) == 0:
+                        rest = rest[0]
 
-            # get new regressors for output model
-            x = self.update(_feature)
+                output = self.output_scaler.unscale(pred.flatten())
+                self._last_feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
+                return pred, rest
 
-            if self.regress_input:
-                x = np.hstack((_feature.flatten(), x.flatten()))
+        else:
+            super().predict(n_predictions=n_predictions, **kwargs)
 
-            # predict next value
-            pred, *args = self.output_model.predict(x.reshape(1, -1))
+    # def predictor(self, simulation=True, send_new_target=True):
+    #     if send_new_target:
+    #         return self.predictor_with_teacher(simulation=simulation)
+    #     else:
+    #         return self.predictor_without_teacher(simulation=simulation)
 
-            output = self.output_scaler.unscale(pred.flatten())
+    # def predictor_without_teacher(self, simulation=True):
+    #     """
+    #     let the model predict
+    #     :param n_predictions: number of predictions in free run mode. This only works if
+    #     number of outputs is equal to the number of inputs
+    #     :param feature: features to predict
+    #     :param simulation: (Boolean) if a copy of the reservoir should be used
+    #     :param inject_error: (Boolean) if estimation error is added to the prediction
+    #     :param num_reps: if inject_error is True, number of
+    #                     repetitions performed with different errors
+    #     :return: prediction generator
+    #     """
 
-            yield output, x, args
+    #     # reservoir = self.reservoir.copy() if simulation else self.reservoir
+    #     _feature = self.input_activation(self.input_scaler.scale(self.teacher[-1, :]))
 
-            # transform output to new input and save it in variable _feature
-            _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
+    #     with self.reservoir.simulate(simulation):
+    #         try:
+    #             while True:
+    #                 # get new regressors for output model
+    #                 x = self.update(_feature)
 
-    def predictor_with_teacher(self, simulation=True):
-        """
-        let the model predict
-        :param n_predictions: number of predictions in free run mode. This only works if
-        number of outputs is equal to the number of inputs
-        :param feature: features to predict
-        :param simulation: (Boolean) if a copy of the reservoir should be used
-        :param inject_error: (Boolean) if estimation error is added to the prediction
-        :param num_reps: if inject_error is True, number of
-                        repetitions performed with different errors
-        :return: prediction generator
-        """
+    #                 if self.regress_input:
+    #                     x = np.hstack((_feature.flatten(), x.flatten()))
 
-        #reservoir = self.reservoir.copy() if simulation else self.reservoir
-        _feature = self.input_activation(self.input_scaler.scale(self.teacher[-1, :]))
+    #                 # predict next value
+    #                 pred, *args = self.output_model.predict(x.reshape(1, -1))
 
-        with self.reservoir.simulate(simulation):
+    #                 output = self.output_scaler.unscale(pred.flatten())
 
-            # get new regressors for output model
-            x = self.update(_feature)
+    #                 yield output, x, args
 
-            if self.regress_input:
-                x = np.hstack((_feature.flatten(), x.flatten()))
+    #                 # transform output to new input and save it in variable _feature
+    #                 _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
+    #         except GeneratorExit:
+    #             pass
 
-            # predict next value
-            pred, *args = self.output_model.predict(x.reshape(1, -1))
+    # def predictor_with_teacher(self, simulation=True):
+    #     """
+    #     let the model predict
+    #     :param n_predictions: number of predictions in free run mode. This only works if
+    #     number of outputs is equal to the number of inputs
+    #     :param feature: features to predict
+    #     :param simulation: (Boolean) if a copy of the reservoir should be used
+    #     :param inject_error: (Boolean) if estimation error is added to the prediction
+    #     :param num_reps: if inject_error is True, number of
+    #                     repetitions performed with different errors
+    #     :return: prediction generator
+    #     """
 
-            output = self.output_scaler.unscale(pred.flatten())
+    #     # reservoir = self.reservoir.copy() if simulation else self.reservoir
+    #     _feature = self.input_activation(self.input_scaler.scale(self.teacher[-1, :]))
 
-            yield output, x, args
+    #     with self.reservoir.simulate(simulation):
+    #         try:
+    #             while True:
+    #                 # get new regressors for output model
+    #                 x = self.update(_feature)
 
-            target_output = yield
-            self.output_model.update_weight(x, target_output.reshape((1, -1)))
+    #                 if self.regress_input:
+    #                     x = np.hstack((_feature.flatten(), x.flatten()))
 
-            # transform output to new input and save it in variable _feature
-            _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
+    #                 # predict next value
+    #                 pred, *args = self.output_model.predict(x.reshape(1, -1))
+
+    #                 output = self.output_scaler.unscale(pred.flatten())
+
+    #                 yield output, x, args
+
+    #                 target_output = yield
+    #                 self.output_model.update_weight(x, target_output.reshape((1, -1)))
+
+    #                 # transform output to new input and save it in variable _feature
+    #                 _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
+    #         except GeneratorExit:
+    #             pass

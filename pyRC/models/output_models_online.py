@@ -30,12 +30,7 @@ class ExpertEvaluation(BaseOutputModel):
         if target is not None and target.ndim == 1:
             target = target.reshape((1, -1))
 
-        experts = np.zeros((x.shape[0], len(self.output_models)))
-        for i in range(x.shape[0]):
-            preds = []
-            for ind, m in zip(self.indices, self.output_models):
-                preds.append(m.predict(x[i, ind].reshape((1, -1))))
-            experts[i, :] = np.hstack(preds).flatten()
+        experts = np.hstack([m.predict(x[:, ind]) for ind, m in zip(self.indices, self.output_models)])
 
         pred = np.dot(experts, self.weights)
 
