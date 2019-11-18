@@ -88,3 +88,7 @@ class MultiStepESN(EchoStateNetwork):
 
 class OnlineESN(EchoStateNetwork, OnlineReservoirModel):
     pass
+
+
+class parallelOnlineESN(parallelESN, OnlineReservoirModel):
+    pass

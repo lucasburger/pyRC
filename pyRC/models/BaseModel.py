@@ -376,11 +376,11 @@ class OnlineReservoirModel(ReservoirModel):
                 x = np.hstack((_feature.flatten(), x.flatten()))
 
             # predict next value
-            pred = self.output_model.predict(x.reshape(1, -1))
+            pred, *args = self.output_model.predict(x.reshape(1, -1))
 
             output = self.output_scaler.unscale(pred.flatten())
 
-            yield output, x
+            yield output, x, args
 
             # transform output to new input and save it in variable _feature
             _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
@@ -410,11 +410,11 @@ class OnlineReservoirModel(ReservoirModel):
                 x = np.hstack((_feature.flatten(), x.flatten()))
 
             # predict next value
-            pred = self.output_model.predict(x.reshape(1, -1))
+            pred, *args = self.output_model.predict(x.reshape(1, -1))
 
             output = self.output_scaler.unscale(pred.flatten())
 
-            yield output, x
+            yield output, x, args
 
             target_output = yield
             self.output_model.update_weight(x, target_output.reshape((1, -1)))
