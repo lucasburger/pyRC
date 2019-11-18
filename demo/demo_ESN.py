@@ -17,7 +17,7 @@ train_feature = mg[:-n_pred]
 test_teacher = mg[-n_pred:]
 
 # set up ESN and train
-e = ESN(size=1000, bias=0.2, spectral_radius=0.95)
+e = ESN(size=1000, bias=0.2, spectral_radius=0.95, sparsity=None)
 r, result_dict = e.train(feature=train_feature, hyper_tuning=False, exclude_hyper=['leak'], error_fun=NRMSE)
 
 # forecast

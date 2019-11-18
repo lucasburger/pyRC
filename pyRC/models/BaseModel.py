@@ -135,7 +135,7 @@ class ReservoirModel(object):
 
         # fit output model and calculate errors
         self.output_model.fit(x, self._teacher)
-        self._fitted, *_ = self.output_model.predict(x)
+        self._fitted = self.output_model.predict(x)
         self._errors = (self._fitted - self._teacher).flatten()
 
         return x
@@ -172,9 +172,7 @@ class ReservoirModel(object):
         else:
             states = None
 
-        extra = []
-
-        # loop over predictions
+        # loop over predictions paths
         for rep in range(num_reps):
             with self.reservoir.simulate(simulation):
                 # inject error if set to true, else set errors to zeros
@@ -197,8 +195,7 @@ class ReservoirModel(object):
                         x = np.hstack((_feature.flatten(), x.flatten()))
 
                     # predict next value
-                    pred, *extras = self.output_model.predict(x.reshape(1, -1))
-                    extra.append(extras)
+                    pred = self.output_model.predict(x.reshape(1, -1))
                     output = self.output_scaler.unscale(pred.flatten())
                     prediction[i, rep] = float(output)
 
@@ -219,15 +216,9 @@ class ReservoirModel(object):
 
         # return values according to input
         if return_states:
-            if return_extra:
-                return prediction, states, extra
-            else:
-                return prediction, states
+            return prediction, states
         else:
-            if return_extra:
-                return prediction, extra
-            else:
-                return prediction
+            return prediction
 
     def output_to_input(self, x):
         return self.input_activation(self.input_scaler.scale(self.output_scaler.unscale(x)))
@@ -389,7 +380,7 @@ class OnlineReservoirModel(ReservoirModel):
                 pred = self.output_model.predict(x.reshape(1, -1))
                 if isinstance(pred, tuple):
                     pred, rest = pred[0], pred[1:]
-                    if len(rest) == 0:
+                    if len(rest) == 1:
                         rest = rest[0]
 
                 output = self.output_scaler.unscale(pred.flatten())
@@ -397,7 +388,7 @@ class OnlineReservoirModel(ReservoirModel):
                 return pred, rest
 
         else:
-            super().predict(n_predictions=n_predictions, **kwargs)
+            return super().predict(n_predictions=n_predictions, **kwargs)
 
     # def predictor(self, simulation=True, send_new_target=True):
     #     if send_new_target:

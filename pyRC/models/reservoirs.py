@@ -80,7 +80,7 @@ class ESNReservoir(BaseReservoir):
         assert spectral_radius > 0
 
         if sparsity is None and self.size > 0:
-            sparsity = min(0.0, 1-float(10/self.size))
+            sparsity = max(0.0, 1-float(10/self.size))
 
         self._spectral_radius = spectral_radius
         self._sparsity = sparsity

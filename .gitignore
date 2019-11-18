@@ -6,6 +6,10 @@
 
 /lecture
 
+/pyRC.egg-info
+/dist
+/build
+
 README.md
 
 .DS_Store
