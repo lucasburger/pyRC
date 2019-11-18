@@ -448,7 +448,7 @@ class OnlineReservoirModel(ReservoirModel):
 
         with self.reservoir.simulate(simulation):
 
-                # get new regressors for output model
+            # get new regressors for output model
             x = self.update(_feature)
 
             if self.regress_input:
