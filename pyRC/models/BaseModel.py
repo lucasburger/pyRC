@@ -364,8 +364,7 @@ class OnlineReservoirModel(ReservoirModel):
         return x
 
     def predict(self, n_predictions=0, feature=None, simulation=True, return_states=False,
-                inject_error=False, num_reps=1,
-                teacher=None, yield_intermediate=True):
+                inject_error=False, num_reps=1):
         """
         let the model predict
         :param n_predictions: number of predictions in free run mode. This only works if
@@ -411,13 +410,6 @@ class OnlineReservoirModel(ReservoirModel):
 
                     # predict next value
                     pred = self.output_model.predict(x.reshape(1, -1))
-                    if isinstance(pred, tuple):
-                        pred, extra_output = pred[0], pred[1:]
-
-                    if yield_intermediate and teacher is None:
-                        yield extra_output
-                    elif teacher is not None:
-                        self.output_model.update_weight(error=pred[1:]-teacher[i, :])
 
                     output = self.output_scaler.unscale(pred.flatten())
                     prediction[i, rep] = float(output)
@@ -438,7 +430,7 @@ class OnlineReservoirModel(ReservoirModel):
             return prediction
 
     def predictor(self, feature=None, simulation=True):
-     """
+        """
         let the model predict
         :param n_predictions: number of predictions in free run mode. This only works if
         number of outputs is equal to the number of inputs
@@ -446,18 +438,17 @@ class OnlineReservoirModel(ReservoirModel):
         :param simulation: (Boolean) if a copy of the reservoir should be used
         :param inject_error: (Boolean) if estimation error is added to the prediction
         :param num_reps: if inject_error is True, number of
-                         repetitions performed with different errors
+                        repetitions performed with different errors
         :return: prediction generator
         """
 
         #reservoir = self.reservoir.copy() if simulation else self.reservoir
         _feature = self.input_activation(self.input_scaler.scale(
-           self.teacher[-1, :] if feature is None else feature))
+            self.teacher[-1, :] if feature is None else feature))
 
         with self.reservoir.simulate(simulation):
-            
 
-            # get new regressors for output model
+                # get new regressors for output model
             x = self.update(_feature)
 
             if states is not None:
