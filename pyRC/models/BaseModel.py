@@ -451,9 +451,6 @@ class OnlineReservoirModel(ReservoirModel):
                 # get new regressors for output model
             x = self.update(_feature)
 
-            if states is not None:
-                states[i, :, rep] = x.flatten()
-
             if self.regress_input:
                 x = np.hstack((_feature.flatten(), x.flatten()))
 
