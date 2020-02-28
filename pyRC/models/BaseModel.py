@@ -3,9 +3,9 @@ from copy import copy
 import numpy as np
 from .output_models import GaussianElimination
 from .reservoirs import BaseReservoir
-from .scaler import tanh, identity
+from ..util.scaler import tanh, identity
 from .. import util
-from .. import optimizer
+from ..util import optimizer
 
 
 class ReservoirModel(object):
@@ -20,8 +20,8 @@ class ReservoirModel(object):
 
         self.rmg = kwargs.pop('prob_dist', util.matrix_uniform)
 
-        self.input_scaler = identity
-        self.output_scaler = identity
+        self.input_scaler = kwargs.pop('input_scaling', util.identity)
+        self.output_scaler = kwargs.pop('output_scaling', util.identity)
 
         self.input_activation = kwargs.pop('input_activation', util.identity)
         self.input_inv_activation = kwargs.pop('input_inv_activation', util.identity)
@@ -62,6 +62,9 @@ class ReservoirModel(object):
         if reservoir is None:
             reservoir = self.reservoir
 
+        if self.W_in is None:
+            self.W_in = util.matrix_uniform(input_array.shape[-1], reservoir.input_size)
+
         if input_array.ndim == 1:
             if input_array.shape[0] == reservoir.size:
                 input_array = input_array.reshape((1, -1))
@@ -73,7 +76,7 @@ class ReservoirModel(object):
     def train(self, feature, burn_in_feature=None, burn_in_split=0.1, teacher=None,
               error_fun=util.RMSE,
               hyper_tuning=False, dimensions=None, exclude_hyper=None,
-              minimizer=None):
+              minimizer=None, bigger_size=None):
         """
         Training of the network
         :param feature: features for the training
@@ -116,11 +119,16 @@ class ReservoirModel(object):
             r, result_dict = optimizer.optimizer(self, error_fun=error_fun, dimensions=dimensions,
                                                  minimizer=minimizer, exclude_hyper=exclude_hyper)
 
+            if bigger_size is not None:
+                self.reservoir.size = bigger_size
+                self.W_in = util.matrix_uniform(self._feature.shape[-1], self.reservoir.input_size)
+
         x = self._train()
+
         if hyper_tuning:
             return r, result_dict
         else:
-            return x, {}
+            return x
 
     def _train(self):
         """
@@ -135,12 +143,17 @@ class ReservoirModel(object):
 
         # fit output model and calculate errors
         self.output_model.fit(x, self._teacher)
-        self._fitted = self.output_model.predict(x)
+        fitted = self.output_model.predict(x)
+        if isinstance(fitted, tuple):
+            self._fitted = fitted[0]
+        else:
+            self._fitted = fitted
+
         self._errors = (self._fitted - self._teacher).flatten()
 
         return x
 
-    def predict(self, n_predictions=0, feature=None, simulation=True, return_states=False,
+    def predict(self, n_predictions=1, feature=None, simulation=True, return_states=False,
                 inject_error=False, num_reps=1,
                 return_extra=False):
         """
@@ -155,26 +168,33 @@ class ReservoirModel(object):
         :return: predictions
         """
 
-        if not inject_error:
-            num_reps = 1
+        if feature is not None and feature.ndim == 2:
+            def _help_predict(x):
+                return self.predict(feature=x, simulation=False)
+            return np.apply_along_axis(_help_predict, axis=1, arr=feature)
+
+        if num_reps > 1:
+            inject_error = True
 
         # reservoir = self.reservoir.copy() if simulation else self.reservoir
         _feature = self.input_activation(self.input_scaler.scale(
-            self.teacher[-1, :] if feature is None else feature))
+            self.teacher[-1, :] if feature is None else feature)
+        )
 
         # allocate storage for predictions
         prediction = np.zeros((n_predictions, num_reps), dtype=np.float64)
 
         # allocate storage for states if return_states=True or if num_reps > 1 and no simulation,
-        # as then, we need to save the states to set the state of the reservoir after the repititions
+        # as then, we need to save the states to set the state of the reservoir after the repetitions
         if return_states or num_reps > 1 and not simulation:
             states = np.zeros(shape=(n_predictions, self.size, num_reps), dtype=np.float64)
         else:
             states = None
 
-        # loop over predictions paths
+        # loop over prediction paths
         for rep in range(num_reps):
             with self.reservoir.simulate(simulation):
+
                 # inject error if set to true, else set errors to zeros
                 if inject_error:
                     errors = np.random.choice(self._errors, n_predictions)
@@ -196,6 +216,9 @@ class ReservoirModel(object):
 
                     # predict next value
                     pred = self.output_model.predict(x.reshape(1, -1))
+                    if isinstance(pred, tuple):
+                        pred, _ = pred[0], pred[1:]
+
                     output = self.output_scaler.unscale(pred.flatten())
                     prediction[i, rep] = float(output)
 
@@ -203,8 +226,10 @@ class ReservoirModel(object):
                     _feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
                     _feature += errors[i]
 
+        prediction[np.isnan(prediction) | np.isinf(prediction)] = np.nan
+
         # average of num_preds of all predictions
-        prediction = np.mean(prediction, axis=-1)
+        prediction = np.nanmean(prediction, axis=-1)
 
         # same for the states
         if states is not None:
@@ -345,8 +370,29 @@ class OnlineReservoirModel(ReservoirModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._last_feature = None
-        if not hasattr(self.output_model, 'update_weight'):
-            raise ValueError("Output model can not be trained online. It needs 'update_weight' method.")
+        # if not hasattr(self.output_model, 'update_weight'):
+        #     raise ValueError("Output model can not be trained online. It needs 'update_weight' method.")
+
+    def _train(self):
+        """
+        This method can be used after new hyper_parameter shave been set.
+        It only uses the instance variables (burn_in-) feature and teacher
+        """
+
+        self.update(self._burn_in_feature)
+
+        self._fitted = self._train_and_predict(self._feature, self._teacher)
+        self._errors = (self._fitted - self._teacher).flatten()
+        return self._fitted
+
+    def _train_and_predict(self, x, y):
+        assert x.ndim == 1 and y.ndim == 1
+
+        res_out = self.update(x)
+        if self.regress_input:
+            res_out = np.hstack((x, res_out))
+
+        return self.output_model.fit(res_out, y)
 
     def predict(self, n_predictions=1, **kwargs):
         """
@@ -368,8 +414,13 @@ class OnlineReservoirModel(ReservoirModel):
         else:
             _feature = self._last_feature if feature is None else feature
 
-        if n_predictions == 1:
-            with self.reservoir.simulate(kwargs.get('simulation', False)):
+        target = kwargs.get("target", None)
+
+        output = np.zeros((n_predictions,), dtype=np.float64)
+        rest = []
+        simulation = kwargs.get('simulation', False)
+        with self.reservoir.simulate(simulation):
+            for i in range(n_predictions):
                 # get new regressors for output model
                 x = self.update(_feature)
 
@@ -378,17 +429,24 @@ class OnlineReservoirModel(ReservoirModel):
 
                 # predict next value
                 pred = self.output_model.predict(x.reshape(1, -1))
+
+                if target is not None:
+                    pred = self.output_model.update_weight(x, target[i])
+
                 if isinstance(pred, tuple):
-                    pred, rest = pred[0], pred[1:]
-                    if len(rest) == 1:
-                        rest = rest[0]
+                    pred, r = pred[0], pred[1:]
 
-                output = self.output_scaler.unscale(pred.flatten())
-                self._last_feature = self.input_activation(self.input_scaler.scale(output)).reshape((-1, 1))
-                return pred, rest
+                    if len(r) == 1:
+                        r = r[0]
 
-        else:
-            return super().predict(n_predictions=n_predictions, **kwargs)
+                output[i] = self.output_scaler.unscale(pred.flatten())
+                # rest.append(r)
+                _feature = self.input_activation(self.input_scaler.scale(pred)).reshape((-1, 1))
+
+            if not simulation:
+                self._last_feature = _feature
+
+            return output
 
     # def predictor(self, simulation=True, send_new_target=True):
     #     if send_new_target:

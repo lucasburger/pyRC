@@ -1,10 +1,10 @@
 
 import numpy as np
-from sklearn.linear_model import RidgeCV, RidgeClassifier, Lars
-import sklearn.linear_model
+# from sklearn.linear_model import RidgeCV, RidgeClassifier, Lars
+# import sklearn.linear_model
 from copy import deepcopy
 from .. import util
-import numba
+from scipy.stats import multivariate_normal
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 
@@ -136,7 +136,7 @@ class MinEigenvalueRegression(BaseOutputModel):
 class GaussianElimination:
 
     def __init__(self, add_intercept: bool = True, ridgelambda: float = 0.0, **kwargs):
-        self.add_intercept = True
+        self.add_intercept = add_intercept
         self.beta = None
         self.ridgelambda = ridgelambda
         self.fitted = None
@@ -163,3 +163,41 @@ class GaussianElimination:
         if self.add_intercept:
             x = np.hstack((np.ones(shape=(x.shape[0], 1)), x))
         return np.dot(x, self.beta)
+
+
+class RidgeRegression:
+
+    def __init__(self, fit_intercept=True, ridgelambdas=None, cv=None, error_fun=util.NRMSE):
+        self.model = GaussianElimination(fit_intercept=fit_intercept)
+        if ridgelambdas is None:
+            ridgelambdas = np.logspace(1, 3, 10)
+        self.ridgelambdas = ridgelambdas
+        self.cv = cv
+        self.error_fun = error_fun
+
+    def fit(self, x, y):
+        if x.ndim == 1:
+            x = x.reshape((-1, 1))
+        if y.ndim == 1:
+            y = y.reshape((-1, 1))
+
+        if self.cv is None:
+            self.cv = util.ts_split(x.shape[0], test_set_size=0.05, test_sets=3)
+
+        errors = {}
+        for i, l in enumerate(self.ridgelambdas):
+            self.model.ridgelambda = l
+            error = []
+            for train, test in self.cv:
+                self.model.fit(x[train, :], y[train, :])
+                error.append(self.error_fun(self.model.predict(x[test, :]), y[test, :]))
+
+            errors[i] = float(np.mean(error))
+
+        self.model.ridgelambda = self.ridgelambdas[min(errors)]
+        self.model.fit(x, y)
+        self.error = {}
+        self.error['outofsample'] = min(errors.values())
+
+    def predict(self, x):
+        return self.model.predict(x)

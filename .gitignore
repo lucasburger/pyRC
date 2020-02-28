@@ -3,6 +3,7 @@
 /dump
 /.vscode
 /.ipynb_checkpoints
+/save
 
 /lecture
 
@@ -23,3 +24,5 @@ To-Dos.txt
 *.pyc
 *.ipynb
 *.mat
+*.npy
+*.json

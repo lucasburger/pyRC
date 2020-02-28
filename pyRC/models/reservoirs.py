@@ -12,8 +12,9 @@ from ..util import self_activation
 class BaseReservoir:
 
     _saved_state = None
+    hyper_params = {}
 
-    def __init__(self, size=0, activation=np.tanh, random_seed=None):
+    def __init__(self, size=0, activation=identity, random_seed=None):
         self._state = np.zeros(shape=(size,), dtype=np.float64)
         self.activation = activation
 
@@ -66,7 +67,8 @@ class BaseReservoir:
 
     @size.setter
     def size(self, size):
-        pass
+        hyper_params = {k: getattr(self, k) for k in self.hyper_params.keys()}
+        self.__init__(size=size, activation=self.activation, **hyper_params)
 
 
 class ESNReservoir(BaseReservoir):
@@ -74,21 +76,37 @@ class ESNReservoir(BaseReservoir):
     hyper_params = {'spectral_radius': (0.0, 1.0),
                     'bias': (-1.0, 1.0)}
 
-    def __init__(self, *args, bias=0.1, spectral_radius=0.5, sparsity=None, echo=None, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, bias=0.0, spectral_radius=0.5, sparsity=None, echo=None,
+                 activation=np.tanh, W_bias=None, **kwargs):
+        super().__init__(*args, activation=activation, **kwargs)
         self._bias = bias
         assert spectral_radius > 0
 
         if sparsity is None and self.size > 0:
-            sparsity = max(0.0, 1-float(10/self.size))
+            sparsity = 1-float(10/self.size)
 
         self._spectral_radius = spectral_radius
         self._sparsity = sparsity
         if echo is None:
             echo = random_echo_matrix(size=(self.size, self.size), sparsity=sparsity, spectral_radius=spectral_radius)
+        elif np.mean(echo.flatten() != 0) > 0.99:
+            echo[matrix_uniform(echo.shape, low=0) < self._sparsity] = 0
+
+            if echo.shape[0] != echo.shape[1]:
+                radius = np.max(np.abs(np.linalg.svd(echo, compute_uv=False)))
+            else:
+                radius = np.max(np.abs(np.linalg.eigvals(echo)))
+
+            if radius > 0:
+                echo *= (spectral_radius / radius)
+            else:
+                echo = np.zeros(self.size)
+
         self._echo = sparse.csr_matrix(echo)
-        # self._W_bias = matrix_uniform(self.size)
-        self._W_bias = np.ones((self.size,))
+        if W_bias is None:
+            W_bias = matrix_uniform(self.size)
+        self._W_bias = W_bias
+        # self._W_bias = np.ones((self.size,))
 
     @property
     def input_size(self):
@@ -184,7 +202,7 @@ class TopologicalReservoir(LeakyESNReservoir):
         kwargs['size'] = 0
         super().__init__(*args, **kwargs)
         self.layers = list()
-        #self._echo_view = self._state_view = None
+        # self._echo_view = self._state_view = None
         self._input_indices = np.zeros(shape=(0,), dtype=int)
         self._output_indices = np.zeros(shape=(0,), dtype=int)
 
@@ -219,8 +237,8 @@ class TopologicalReservoir(LeakyESNReservoir):
         self._state = np.hstack((self._state, np.zeros((size,))))
         self._W_bias = np.hstack((self._W_bias, matrix_uniform(size)))
 
-        #self._echo_view = self.__echo_view()
-        #self._state_view = self.__state_view()
+        # self._echo_view = self.__echo_view()
+        # self._state_view = self.__state_view()
 
     # def get_connection(self, layer_from, layer_to):
     #     return np.copy(self._echo_view[layer_to, layer_from])
@@ -369,17 +387,17 @@ class ESNReservoirArray:
             r.reset()
 
     def simulate(self, simulate=True):
-        if simulate:
-            self._saved_state = [r._state for r in self.reservoirs]
+        if simulate and self._saved_state is None:
+            self._saved_state = [r._state.copy() for r in self.reservoirs]
         return self
 
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
-        if self._saved_state:
-            for i, r in enumerate(self.reservoirs):
-                r._state[:] = self._saved_state[i]
+        if self._saved_state is not None:
+            for r, ss in zip(self.reservoirs, self._saved_state):
+                r._state[:] = ss
             self._saved_state = None
 
     @property
@@ -402,6 +420,20 @@ class ESNReservoirArray:
 
     def _get_state(self):
         return np.hstack([r.state for r in self.reservoirs])
+
+    @state.setter
+    def state(self, other):
+        self._set_state(other)
+
+    def _set_state(self, other):
+        other = other.flatten()
+        if other.shape[0] != self.size:
+            raise ValueError('Size mismatch. Expexted {size} but got {other}'.format(size=self.state.shape, other=other.shape))
+
+        sizes = [r.size for r in self.reservoirs]
+        for i, res in enumerate(self.reservoirs):
+            i_start, i_end = sum(sizes[:i]), sum(sizes[:i+1])
+            res._state[:] = other[i_start:i_end]
 
     @property
     def spectral_radius(self):
@@ -463,15 +495,12 @@ class SASReservoir(BaseReservoir):
         if kwargs.get('size', 0) == 0:
             kwargs['size'] = 200
 
-        if kwargs.get('activation', None) is None:
-            kwargs['activation'] = self_activation()
-
         super().__init__(*args, **kwargs)
         self.input_dim = input_dim
 
         # assert 0 < spectral_radius < 1
         if sparsity is None:
-            sparsity = min(0.0, 1-float(10/self.size))
+            sparsity = max(0.0, 1-float(5/self.size))
 
         self.p = MultivariatePolynomial.random(shape=(self.size, self.size), input_dim=input_dim, order=order_p,
                                                sparsity=sparsity, spectral_radius=spectral_radius, matrix_type='full')

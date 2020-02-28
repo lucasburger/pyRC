@@ -1,15 +1,12 @@
 #!/usr/bin/python3
 
 from pyRC.models import EchoStateNetwork as ESN
-from pyRC.util import MackeyGlass, RMSE, NRMSE, MSE
+from pyRC.util import MackeyGlass, RMSE, NRMSE, MSE, log_activation
 import numpy as np
 import matplotlib.pyplot as plt
-import json
+from scipy.io import loadmat
 
-
-l = 4000  # length of mackey glass timeseries
-mg = MackeyGlass(l).reshape((-1, 1))
-mg -= np.mean(mg)  # demean
+mg = loadmat('MGTimeseries_dde23.mat')['MGseries_dde23_tau17'].T
 
 # split into train and test parts
 n_pred = 1000
@@ -17,8 +14,8 @@ train_feature = mg[:-n_pred]
 test_teacher = mg[-n_pred:]
 
 # set up ESN and train
-e = ESN(size=1000, bias=0.2, spectral_radius=0.95, sparsity=None)
-r, result_dict = e.train(feature=train_feature, hyper_tuning=False, exclude_hyper=['leak'], error_fun=NRMSE)
+e = ESN(size=1000, bias=0.2, spectral_radius=0.95)
+r, result_dict = e.train(feature=train_feature)
 
 # forecast
 pred = e.predict(n_predictions=n_pred, simulation=True)
