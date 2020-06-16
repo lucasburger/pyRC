@@ -12,7 +12,7 @@ With pip and git from this GitHub repo:
 
 ```
 pip install git+https://github.com/lucasburger/pyRC.git
-´´´
+```
 
 ## The Library
 
